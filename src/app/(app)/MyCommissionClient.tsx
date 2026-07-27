@@ -103,7 +103,7 @@ export function MyCommissionClient() {
           </div>
 
           <div className="card mb-6 p-5">
-            <h2 className="mb-3 text-sm font-semibold">This month's commission</h2>
+            <h2 className="mb-3 text-sm font-semibold">This month's completions</h2>
             <div className="flex flex-col gap-2 text-sm">
               <Row label={`${data.completions.length} matter${data.completions.length === 1 ? "" : "s"} × ${formatPence(data.commissionPerMatterPence)}`} value={formatPence(data.calc.basePence)} />
               {data.calc.bonusHit && (
