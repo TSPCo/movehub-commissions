@@ -88,19 +88,16 @@ export function MyCommissionClient() {
             </div>
           )}
 
-          <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="mb-6 grid grid-cols-2 gap-4">
             <StatCard label="Files at month start" value={data.fileCountAtStart == null ? "—" : String(data.fileCountAtStart)} />
             <StatCard label="Completed this month" value={String(data.completions.length)} />
-            <StatCard
-              label="Bonus threshold"
-              value={data.calc.bonusThreshold == null ? "—" : `${data.calc.bonusThreshold}`}
-            />
-            <StatCard
-              label="Bonus status"
-              value={data.calc.bonusThreshold == null ? "—" : data.calc.bonusHit ? "Hit! 🎉" : "Not yet"}
-              accent={data.calc.bonusHit ? "success" : undefined}
-            />
           </div>
+
+          <BonusProgressBar
+            completions={data.completions.length}
+            bonusThreshold={data.calc.bonusThreshold}
+            bonusHit={data.calc.bonusHit}
+          />
 
           <div className="card mb-6 p-5">
             <h2 className="mb-3 text-sm font-semibold">This month's completions</h2>
@@ -149,6 +146,85 @@ export function MyCommissionClient() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function BonusProgressBar({
+  completions,
+  bonusThreshold,
+  bonusHit,
+}: {
+  completions: number;
+  bonusThreshold: number | null;
+  bonusHit: boolean;
+}) {
+  if (bonusThreshold == null) return null;
+
+  const scaleMax = Math.max(bonusThreshold * 1.3, completions * 1.1, 1);
+  const markerPct = Math.min((completions / scaleMax) * 100, 100);
+  const thresholdPct = Math.min((bonusThreshold / scaleMax) * 100, 100);
+  const markerColor = bonusHit ? "var(--success)" : "var(--text-primary)";
+
+  return (
+    <div className="card mb-6 p-5">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Bonus progress</h2>
+        <span
+          className="text-sm font-semibold"
+          style={{ color: bonusHit ? "var(--success)" : "var(--text-secondary)" }}
+        >
+          {completions} / {bonusThreshold} completions{bonusHit ? " — bonus hit! 🎉" : ""}
+        </span>
+      </div>
+
+      <div className="relative" style={{ height: 64 }}>
+        <div
+          className="absolute rounded-full"
+          style={{
+            left: 0,
+            right: 0,
+            top: 28,
+            height: 8,
+            background: "linear-gradient(to right, var(--danger), var(--warning), var(--success))",
+          }}
+        />
+
+        <div
+          className="absolute"
+          style={{
+            left: `${thresholdPct}%`,
+            top: 24,
+            height: 16,
+            width: 2,
+            background: "rgba(255,255,255,0.85)",
+            transform: "translateX(-1px)",
+          }}
+        />
+        <div
+          className="absolute whitespace-nowrap text-[11px]"
+          style={{ left: `${thresholdPct}%`, top: 44, transform: "translateX(-50%)", color: "var(--text-muted)" }}
+        >
+          Bonus at {bonusThreshold}
+        </div>
+
+        <div
+          className="absolute flex flex-col items-center"
+          style={{ left: `${markerPct}%`, top: 0, transform: "translateX(-50%)" }}
+        >
+          <span className="mb-1 text-[11px] font-semibold" style={{ color: markerColor }}>{completions}</span>
+          <div
+            style={{
+              width: 14,
+              height: 14,
+              borderRadius: 9999,
+              background: markerColor,
+              border: "2px solid var(--bg-card)",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.3)",
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }
