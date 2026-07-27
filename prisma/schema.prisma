@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum ResetRequestStatus {
+  PENDING
+  APPROVED
+  DISMISSED
+  USED
+}
+
+// ─── Staff login ───────────────────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(cuid())
+  name         String?
+  email        String     @unique
+  passwordHash String?
+  role         Role       @default(STAFF)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+
+  // Must exactly match InTouch's feeEarnerFullName for this person, so
+  // completions/open-file counts attribute to them correctly. Null until an
+  // admin sets it (e.g. right after invite, or if InTouch naming changes).
+  intouchFeeEarnerName String?
+
+  inviteToken       String?   @unique
+  inviteTokenExpiry DateTime?
+
+  resetRequests         PasswordResetRequest[] @relation("Requester")
+  resolvedResetRequests PasswordResetRequest[] @relation("Resolver")
+  snapshots             MonthlySnapshot[]
+  completedMatters      CompletedMatter[]
+}
+
+model PasswordResetRequest {
+  id           String             @id @default(cuid())
+  userId       String
+  status       ResetRequestStatus @default(PENDING)
+  token        String?            @unique
+  tokenExpiry  DateTime?
+  resolvedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime           @default(now())
+
+  user       User  @relation("Requester", fields: [userId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("Resolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── One snapshot per user per month: "how many open files did they have ──
+// when this month started". Captured automatically (see src/lib/snapshot.ts)
+// via a CRON_SECRET-protected endpoint, meant to run on/shortly after the 1st.
+
+model MonthlySnapshot {
+  id               String   @id @default(cuid())
+  userId           String
+  year             Int
+  month            Int // 1-12
+  fileCountAtStart Int
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year, month])
+  @@index([userId])
+}
+
+// ─── One row per InTouch matter whose "Completion" task is done ───────────
+// Dedup'd by intouchGuid so a repeat sync never double-counts. userId is
+// resolved by matching the matter's feeEarnerFullName against
+// User.intouchFeeEarnerName at sync time; null (with handlerName still set)
+// means no match was found — surfaces on the admin page as needing manual
+// attribution rather than silently dropping the completion.
+
+model CompletedMatter {
+  id             String   @id @default(cuid())
+  userId         String?
+  intouchGuid    String   @unique
+  address        String
+  postcode       String?
+  handlerName    String?
+  completionDate DateTime
+  createdAt      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([completionDate])
+}
+
+// ─── Singleton commission scheme settings ──────────────────────────────────
+
+model Settings {
+  id                        String    @id @default("singleton")
+  commissionPerMatterPence  Int       @default(10000)
+  bonusUpliftPercent        Float     @default(10)
+  bonusThresholdNumerator   Int       @default(1)
+  bonusThresholdDenominator Int       @default(3)
+  // Matters completed before this date are never imported by the InTouch
+  // sync, even on a first run — same safety valve as movehub-invoicing's
+  // intouchSyncSinceDate.
+  intouchSyncSinceDate      DateTime?
+  updatedAt                 DateTime  @updatedAt
+}

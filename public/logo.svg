@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <defs>
+    <!-- Ring gradient: teal bottom-left → blue → indigo → pink top-right -->
+    <linearGradient id="ringGrad" x1="5%" y1="95%" x2="90%" y2="8%" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#00D9C8"/>
+      <stop offset="28%"  stop-color="#3B82F6"/>
+      <stop offset="58%"  stop-color="#7C3AED"/>
+      <stop offset="85%"  stop-color="#A855F7"/>
+      <stop offset="100%" stop-color="#D946EF"/>
+    </linearGradient>
+
+    <!-- Gradient dot: purple → hot pink -->
+    <radialGradient id="dotGrad" cx="35%" cy="35%" r="65%">
+      <stop offset="0%"   stop-color="#C084FC"/>
+      <stop offset="100%" stop-color="#D946EF"/>
+    </radialGradient>
+
+    <!-- "hub" text gradient: purple → cyan (left to right) -->
+    <linearGradient id="hubGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#A855F7"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+
+    <!-- Clip path to cut a gap in the ring where the dot sits -->
+    <mask id="ringMask">
+      <rect width="500" height="500" fill="white"/>
+      <!-- Cut a gap at ~1 o'clock (top-right area) for the dot -->
+      <circle cx="336" cy="103" r="32" fill="black"/>
+    </mask>
+  </defs>
+
+  <!-- Background -->
+  <rect width="500" height="500" fill="#0D1127"/>
+
+  <!-- ── RING ── -->
+  <circle
+    cx="250" cy="210" r="148"
+    stroke="url(#ringGrad)" stroke-width="13"
+    fill="none"
+    mask="url(#ringMask)"
+  />
+
+  <!-- ── SHADOW / PLANET (dark circle, upper-left of ring interior) ── -->
+  <circle cx="205" cy="158" r="52" fill="#0D1127"/>
+  <!-- Soft shadow edge on the planet -->
+  <circle cx="205" cy="158" r="52" fill="none" stroke="rgba(0,0,0,0.6)" stroke-width="4"/>
+
+  <!-- ── GRADIENT DOT (sits on ring at ~1 o'clock) ── -->
+  <circle cx="336" cy="103" r="28" fill="url(#dotGrad)"/>
+
+  <!-- ── LETTER M ── -->
+  <!-- Rounded lowercase m, white, centered in ring -->
+  <text
+    x="250" y="305"
+    font-family="'Nunito', 'Varela Round', 'Arial Rounded MT Bold', Arial, sans-serif"
+    font-size="145"
+    font-weight="800"
+    fill="white"
+    text-anchor="middle"
+    letter-spacing="-2"
+  >m</text>
+
+  <!-- ── WORDMARK: "move" white + "hub" gradient ── -->
+  <text
+    x="250" y="428"
+    font-family="'Nunito', 'Varela Round', 'Arial Rounded MT Bold', Arial, sans-serif"
+    font-size="72"
+    font-weight="600"
+    text-anchor="middle"
+    letter-spacing="-1"
+  >
+    <tspan fill="white">move</tspan><tspan fill="url(#hubGrad)">hub</tspan>
+  </text>
+</svg>
