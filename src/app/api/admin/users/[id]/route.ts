@@ -48,14 +48,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { id } = await params;
+
+  if (id === session.sub) {
+    return NextResponse.json({ error: "You can't delete your own account" }, { status: 400 });
+  }
 
   const existing = await db.user.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (existing.status !== "INVITED") {
-    return NextResponse.json({ error: "Only a pending invite can be cancelled" }, { status: 400 });
-  }
 
+  // Deleting cascades their MonthlySnapshots; any CompletedMatter rows keep
+  // existing but revert to unattributed (userId: null) rather than being
+  // deleted themselves — the InTouch matter still really completed.
   await db.user.delete({ where: { id } });
 
   return NextResponse.json({ ok: true });

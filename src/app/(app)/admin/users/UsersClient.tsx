@@ -140,6 +140,19 @@ export function UsersClient({
     router.refresh();
   }
 
+  async function handleDeleteUser(id: string, label: string) {
+    if (!confirm(`Delete ${label}? This permanently removes their account and login. Any completed matters attributed to them become unassigned rather than being deleted.`)) return;
+    setError(null);
+    const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+    const body = await res.json();
+    if (!res.ok) {
+      setError(body.error || "Something went wrong");
+      return;
+    }
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+    router.refresh();
+  }
+
   async function handleResetPassword(id: string) {
     if (newPassword.length < 8) {
       setError("Password must be at least 8 characters");
@@ -333,16 +346,27 @@ export function UsersClient({
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => {
-                        setPasswordResetId(u.id);
-                        setNewPassword("");
-                      }}
-                      className="text-xs font-medium"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Reset password
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setPasswordResetId(u.id);
+                          setNewPassword("");
+                        }}
+                        className="text-xs font-medium"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Reset password
+                      </button>
+                      {u.id !== currentUserId && (
+                        <button
+                          onClick={() => handleDeleteUser(u.id, u.name ?? u.email)}
+                          className="text-xs font-medium"
+                          style={{ color: "var(--danger)" }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   )}
                 </td>
               </tr>
