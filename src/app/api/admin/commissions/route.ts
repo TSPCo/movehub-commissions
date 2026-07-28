@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   const { start, end } = monthRange(year, month);
 
-  const [users, snapshots, completionCounts, settings, unmatched] = await Promise.all([
+  const [users, snapshots, completionCounts, settings, unmatchedCount] = await Promise.all([
     db.user.findMany({
       where: { status: { not: "DISABLED" } },
       orderBy: { name: "asc" },
@@ -26,9 +26,8 @@ export async function GET(request: NextRequest) {
       _count: { _all: true },
     }),
     getSettings(),
-    db.completedMatter.findMany({
+    db.completedMatter.count({
       where: { completionDate: { gte: start, lt: end }, userId: null },
-      select: { id: true, address: true, postcode: true, handlerName: true, completionDate: true },
     }),
   ]);
 
@@ -53,9 +52,5 @@ export async function GET(request: NextRequest) {
 
   const totalOwedPence = rows.reduce((sum, r) => sum + r.calc.totalPence, 0);
 
-  return NextResponse.json({
-    rows,
-    totalOwedPence,
-    unmatched: unmatched.map((m) => ({ ...m, completionDate: m.completionDate.toISOString() })),
-  });
+  return NextResponse.json({ rows, totalOwedPence, unmatchedCount });
 }

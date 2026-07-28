@@ -10,7 +10,17 @@ export default async function AdminUsersPage() {
   const [users, resetRequests] = await Promise.all([
     db.user.findMany({
       orderBy: { createdAt: "asc" },
-      select: { id: true, name: true, email: true, role: true, status: true, intouchFeeEarnerName: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        intouchFeeEarnerName: true,
+        createdAt: true,
+        peerDeleteRequestedAt: true,
+        peerDeleteRequestedFrom: true,
+      },
     }),
     db.passwordResetRequest.findMany({
       where: { status: "PENDING" },
@@ -22,6 +32,7 @@ export default async function AdminUsersPage() {
   const serializedUsers = users.map((u) => ({
     ...u,
     createdAt: u.createdAt.toISOString(),
+    peerDeleteRequestedAt: u.peerDeleteRequestedAt?.toISOString() ?? null,
   }));
   const serializedResetRequests = resetRequests.map((r) => ({ id: r.id, createdAt: r.createdAt.toISOString(), user: r.user }));
 

@@ -44,6 +44,13 @@ model User {
   inviteToken       String?   @unique
   inviteTokenExpiry DateTime?
 
+  // Set when movehub-holidays reports this person was deleted there, but they
+  // had a real (non-INVITED) account here — status flips to DISABLED
+  // immediately, but the actual delete needs an explicit admin confirmation
+  // rather than happening automatically. See src/lib/peerSync.ts.
+  peerDeleteRequestedAt   DateTime?
+  peerDeleteRequestedFrom String?
+
   resetRequests         PasswordResetRequest[] @relation("Requester")
   resolvedResetRequests PasswordResetRequest[] @relation("Resolver")
   snapshots             MonthlySnapshot[]
@@ -89,8 +96,9 @@ model MonthlySnapshot {
 // Dedup'd by intouchGuid so a repeat sync never double-counts. userId is
 // resolved by matching the matter's feeEarnerFullName against
 // User.intouchFeeEarnerName at sync time; null (with handlerName still set)
-// means no match was found — surfaces on the admin page as needing manual
-// attribution rather than silently dropping the completion.
+// means no match was found. Each User is a fixed one-to-one link to a real
+// person's email, so a mismatch is fixed by correcting their fee earner
+// name on the Staff page, not by manually reassigning individual matters.
 
 model CompletedMatter {
   id             String   @id @default(cuid())

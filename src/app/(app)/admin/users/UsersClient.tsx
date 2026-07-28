@@ -11,6 +11,8 @@ type UserItem = {
   status: "INVITED" | "ACTIVE" | "DISABLED";
   intouchFeeEarnerName: string | null;
   createdAt: string;
+  peerDeleteRequestedAt: string | null;
+  peerDeleteRequestedFrom: string | null;
 };
 
 type ResetRequestItem = {
@@ -153,6 +155,19 @@ export function UsersClient({
     router.refresh();
   }
 
+  async function handleConfirmPeerDelete(id: string, label: string) {
+    if (!confirm(`Delete ${label}? They were removed in Move Hub Holidays. This permanently removes their account and login here too.`)) return;
+    setError(null);
+    const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+    const body = await res.json();
+    if (!res.ok) {
+      setError(body.error || "Something went wrong");
+      return;
+    }
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+    router.refresh();
+  }
+
   async function handleResetPassword(id: string) {
     if (newPassword.length < 8) {
       setError("Password must be at least 8 characters");
@@ -215,6 +230,42 @@ export function UsersClient({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {users.some((u) => u.peerDeleteRequestedAt) && (
+        <div className="card p-4 mb-4" style={{ borderColor: "var(--warning)" }}>
+          <h2 className="text-sm font-semibold mb-3">Removed elsewhere</h2>
+          <div className="flex flex-col gap-2">
+            {users
+              .filter((u) => u.peerDeleteRequestedAt)
+              .map((u) => (
+                <div key={u.id} className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">{u.name ?? u.email}</p>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                      Deleted in Move Hub {u.peerDeleteRequestedFrom === "holidays" ? "Holidays" : u.peerDeleteRequestedFrom} — disabled here, awaiting confirmation.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleConfirmPeerDelete(u.id, u.name ?? u.email)}
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                      style={{ background: "rgba(239,68,68,0.15)", color: "var(--danger)" }}
+                    >
+                      Confirm delete
+                    </button>
+                    <button
+                      onClick={() => updateUser(u.id, { dismissPeerDeleteFlag: true })}
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                      style={{ background: "rgba(148,163,184,0.15)", color: "var(--text-muted)" }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
       )}

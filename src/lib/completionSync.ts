@@ -6,8 +6,9 @@ import { getSettings } from "@/lib/settings";
  * Checks InTouch for newly-completed Move Hub matters and records each one,
  * attributing it to a User by matching the matter's InTouch fee earner name
  * against User.intouchFeeEarnerName (case-insensitive, trimmed). No match
- * still gets recorded (userId: null, handlerName kept) so it shows up on the
- * admin page as needing manual attribution rather than silently vanishing.
+ * still gets recorded (userId: null, handlerName kept) rather than silently
+ * vanishing — fix the mismatch by correcting the fee earner name on the
+ * Staff page, since each is a fixed one-to-one link to that person's email.
  */
 export async function runCompletionSync(): Promise<CompletionSyncSummary> {
   const [existing, users, settings] = await Promise.all([

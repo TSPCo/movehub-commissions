@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { generateToken } from "@/lib/auth";
 import { INVITE_TTL_MS } from "@/lib/tokens";
 import { getAppUrl } from "@/lib/url";
+import { notifyPeer } from "@/lib/peerSync";
 
 const USER_SELECT = { id: true, name: true, email: true, role: true, status: true, intouchFeeEarnerName: true, createdAt: true } as const;
 
@@ -44,6 +45,8 @@ export async function POST(request: NextRequest) {
   });
 
   const inviteUrl = new URL(`/invite/${inviteToken}`, getAppUrl(request)).toString();
+
+  await notifyPeer("invited", { email, role });
 
   return NextResponse.json({ user, inviteUrl }, { status: 201 });
 }
