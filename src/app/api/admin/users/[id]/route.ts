@@ -24,6 +24,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const data: Record<string, unknown> = {};
 
+  if (typeof body?.name === "string") {
+    data.name = body.name.trim() || null;
+  }
+
   if (typeof body?.intouchFeeEarnerName === "string") {
     data.intouchFeeEarnerName = body.intouchFeeEarnerName.trim() || null;
   }
