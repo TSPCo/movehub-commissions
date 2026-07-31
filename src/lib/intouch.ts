@@ -51,6 +51,24 @@ async function throttle() {
   lastRequestAt = Date.now();
 }
 
+// Someone else on the shared account (another one of the sibling apps using
+// this same INTOUCH_API_KEY, or a concurrent manual run) can burn through the
+// account-wide budget even though this app's own throttle() keeps it under
+// 60/60s alone. Rather than giving up quickly, a 429 here just waits out
+// whatever InTouch's own error tells us to wait — "You may only make 60
+// requests per 60 seconds. Try again in N seconds." — plus a small buffer,
+// and retries. Sync runs are manual/daily and not time-sensitive, so patience
+// is cheap; MAX_RATE_LIMIT_WAIT_MS is only a backstop against a genuinely
+// stuck (e.g. misconfigured) key looping forever, not a realistic ceiling.
+const DEFAULT_RATE_LIMIT_WAIT_MS = 65_000;
+const MAX_RATE_LIMIT_WAIT_MS = 30 * 60 * 1000;
+
+function parseRetryAfterMs(message: string | undefined): number {
+  const match = message?.match(/(\d+)\s*seconds?/i);
+  if (!match) return DEFAULT_RATE_LIMIT_WAIT_MS;
+  return (Number(match[1]) + 2) * 1000;
+}
+
 async function intouchFetch(path: string, params: Record<string, string> = {}): Promise<any> {
   const apiKey = process.env.INTOUCH_API_KEY;
   if (!apiKey) throw new IntouchApiError(503, "InTouch API key not configured");
@@ -58,15 +76,21 @@ async function intouchFetch(path: string, params: Record<string, string> = {}): 
   const url = new URL(`${INTOUCH_BASE}${path}`);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
-  const maxRetries = 3;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  let totalWaitedMs = 0;
+  while (true) {
     await throttle();
     const res = await fetch(url, {
       headers: { "x-intouch-o-token": apiKey, "content-type": "application/json; charset=utf-8" },
     });
 
-    if (res.status === 429 && attempt < maxRetries) {
-      await delay(2000 * 2 ** attempt);
+    if (res.status === 429) {
+      const body = await res.json().catch(() => ({}));
+      const waitMs = parseRetryAfterMs(body?.message);
+      totalWaitedMs += waitMs;
+      if (totalWaitedMs > MAX_RATE_LIMIT_WAIT_MS) {
+        throw new IntouchApiError(429, body?.message ?? "InTouch rate limit exceeded — gave up after 30 minutes of waiting");
+      }
+      await delay(waitMs);
       continue;
     }
 
@@ -77,8 +101,6 @@ async function intouchFetch(path: string, params: Record<string, string> = {}): 
 
     return res.json();
   }
-
-  throw new IntouchApiError(429, "InTouch rate limit exceeded after retries");
 }
 
 /** Paginates through the full matter book once. */

@@ -61,7 +61,7 @@ export function AdminCommissionsClient() {
       return;
     }
     setActionResult(
-      `Sync complete: ${data.found} newly completed matter${data.found === 1 ? "" : "s"} found (${data.checked} checked).${data.stoppedEarly ? " Stopped early on InTouch's rate limit — run again shortly." : ""}`
+      `Sync complete: ${data.found} newly completed matter${data.found === 1 ? "" : "s"} found (${data.checked} checked).${data.stoppedEarly ? " Stopped after 30 minutes of waiting out InTouch's rate limit — anything already found above was still saved. Run the sync again later to pick up where it left off." : ""}`
     );
     load();
   }
