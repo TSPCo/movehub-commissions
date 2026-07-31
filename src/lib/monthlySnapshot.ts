@@ -22,8 +22,12 @@ export async function runMonthlySnapshot(opts: { year?: number; month?: number; 
   const year = opts.year ?? now.getUTCFullYear();
   const month = opts.month ?? now.getUTCMonth() + 1;
 
+  // Matches the same eligibility as the commission table itself (any non-DISABLED
+  // user with a fee-earner name) rather than requiring ACTIVE — someone who's still
+  // sitting on a pending invite can already have real completions attributed to them
+  // in InTouch, and would otherwise never get a "files at start" baseline at all.
   const users = await db.user.findMany({
-    where: { status: "ACTIVE", intouchFeeEarnerName: { not: null } },
+    where: { status: { not: "DISABLED" }, intouchFeeEarnerName: { not: null } },
     select: { id: true, intouchFeeEarnerName: true },
   });
 
