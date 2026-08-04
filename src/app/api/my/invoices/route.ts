@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getLifetimeEarnedPence, MAX_INVOICE_FILE_BYTES, ALLOWED_INVOICE_MIME_TYPES } from "@/lib/payments";
+import { formatPence } from "@/lib/money";
 
 export async function GET() {
   const session = await getSession();
@@ -44,6 +45,26 @@ export async function POST(request: NextRequest) {
   }
   if (!ALLOWED_INVOICE_MIME_TYPES.includes(file.type)) {
     return NextResponse.json({ error: "Only PDF, PNG, or JPG files are accepted" }, { status: 400 });
+  }
+
+  // Sense-check against real completed matters: can't invoice for more than
+  // has actually been earned, minus anything already invoiced (paid or still
+  // pending) — the pending half of that matters too, or someone could submit
+  // the same amount twice before the first one's marked paid.
+  const [lifetimeEarnedPence, existingInvoices] = await Promise.all([
+    getLifetimeEarnedPence(session.sub),
+    db.staffInvoice.findMany({ where: { userId: session.sub }, select: { amountPence: true } }),
+  ]);
+  const alreadyInvoicedPence = existingInvoices.reduce((sum, i) => sum + i.amountPence, 0);
+  const availablePence = lifetimeEarnedPence - alreadyInvoicedPence;
+
+  if (amountPence > availablePence) {
+    return NextResponse.json(
+      {
+        error: `That's more than you're currently owed — based on completed matters, you can invoice up to ${formatPence(Math.max(availablePence, 0))}.`,
+      },
+      { status: 400 }
+    );
   }
 
   const fileData = Buffer.from(await file.arrayBuffer());

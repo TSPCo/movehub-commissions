@@ -92,8 +92,7 @@ export function MyInvoicesClient() {
 
       <div className="card mb-4 p-5">
         <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
-          Submit an invoice for what&apos;s owed — it doesn&apos;t need to match any particular month, so a quieter month can
-          be combined into the next invoice.
+          Submit an invoice for what&apos;s owed.
         </p>
         <form onSubmit={handleUpload} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
