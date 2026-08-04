@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { MyCommissionClient } from "./MyCommissionClient";
+import { MyInvoicesClient } from "./MyInvoicesClient";
 
 export default async function MyCommissionPage() {
   const session = await requireUser();
@@ -15,6 +16,7 @@ export default async function MyCommissionPage() {
     <div>
       <PageHeader title="My Commission" description={`Hi ${session.name} — your commission tracker.`} />
       <MyCommissionClient />
+      <MyInvoicesClient />
     </div>
   );
 }

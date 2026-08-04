@@ -25,6 +25,11 @@ enum ResetRequestStatus {
   USED
 }
 
+enum InvoiceStatus {
+  PENDING
+  PAID
+}
+
 // ─── Staff login ───────────────────────────────────────────────────────────
 
 model User {
@@ -55,6 +60,8 @@ model User {
   resolvedResetRequests PasswordResetRequest[] @relation("Resolver")
   snapshots             MonthlySnapshot[]
   completedMatters      CompletedMatter[]
+  invoices              StaffInvoice[]         @relation("InvoiceOwner")
+  uploadedInvoices      StaffInvoice[]         @relation("InvoiceUploader")
 }
 
 model PasswordResetRequest {
@@ -114,6 +121,33 @@ model CompletedMatter {
 
   @@index([userId])
   @@index([completionDate])
+}
+
+// ─── Invoices staff submit (or an admin uploads on their behalf) against ───
+// commission owed. Deliberately NOT tied to a specific calendar month — an
+// invoice can cover one slow month or several combined, so "outstanding" is
+// computed as lifetime commission earned (see src/lib/payments.ts) minus the
+// sum of invoices marked PAID, not a per-month reconciliation.
+
+model StaffInvoice {
+  id           String        @id @default(cuid())
+  userId       String?
+  uploadedById String?
+  amountPence  Int
+  fileName     String
+  fileMimeType String
+  fileData     Bytes
+  status       InvoiceStatus @default(PENDING)
+  paidAt       DateTime?
+  createdAt    DateTime      @default(now())
+
+  // Both SetNull (not the invoice's own delete) so a payment record — real
+  // financial history — outlives either the staff member's login or the
+  // admin who happened to upload it, same precedent as CompletedMatter.
+  user       User? @relation("InvoiceOwner", fields: [userId], references: [id], onDelete: SetNull)
+  uploadedBy User? @relation("InvoiceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
 }
 
 // ─── Singleton commission scheme settings ──────────────────────────────────

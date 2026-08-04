@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
-import { Wallet, Users, UserCog, Settings, LogOut } from "lucide-react";
+import { Wallet, Users, UserCog, Settings, LogOut, Receipt } from "lucide-react";
 
 type Props = {
   user: { name: string; email: string; role: "ADMIN" | "STAFF" };
@@ -12,6 +12,7 @@ type Props = {
 const nav = [
   { href: "/", label: "My Commission", icon: Wallet, roles: ["STAFF"] as const },
   { href: "/admin", label: "Team Overview", icon: Users, roles: ["ADMIN"] as const },
+  { href: "/admin/payments", label: "Payments", icon: Receipt, roles: ["ADMIN"] as const },
   { href: "/admin/users", label: "Staff", icon: UserCog, roles: ["ADMIN"] as const },
   { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["ADMIN"] as const },
 ];
