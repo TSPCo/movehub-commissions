@@ -10,10 +10,10 @@ type Props = {
 };
 
 const nav = [
-  { href: "/", label: "My Commission", icon: Wallet, adminOnly: false },
-  { href: "/admin", label: "Team Overview", icon: Users, adminOnly: true },
-  { href: "/admin/users", label: "Staff", icon: UserCog, adminOnly: true },
-  { href: "/admin/settings", label: "Settings", icon: Settings, adminOnly: true },
+  { href: "/", label: "My Commission", icon: Wallet, roles: ["STAFF"] as const },
+  { href: "/admin", label: "Team Overview", icon: Users, roles: ["ADMIN"] as const },
+  { href: "/admin/users", label: "Staff", icon: UserCog, roles: ["ADMIN"] as const },
+  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["ADMIN"] as const },
 ];
 
 export function Sidebar({ user }: Props) {
@@ -38,7 +38,7 @@ export function Sidebar({ user }: Props) {
 
       <nav className="flex-1 space-y-0.5 p-3">
         {nav
-          .filter((item) => !item.adminOnly || user.role === "ADMIN")
+          .filter((item) => (item.roles as readonly string[]).includes(user.role))
           .map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
             return (
