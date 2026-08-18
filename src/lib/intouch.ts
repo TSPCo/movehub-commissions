@@ -148,7 +148,11 @@ export async function findFeeEarnerNamesForTeam(teamFragment: string): Promise<s
   const matters = await fetchMoveHubMatters();
   const names = new Set<string>();
   for (const m of matters) {
-    if ((m.feeEarnerTeamName ?? "").toLowerCase().includes(fragment) && m.feeEarnerFullName) {
+    // Strip whitespace before comparing — the email-derived fragment is always one
+    // unbroken word (e.g. "parklane"), but InTouch's own team name can be two words
+    // ("Move Hub Team Park Lane"), which would otherwise never match.
+    const normalizedTeamName = (m.feeEarnerTeamName ?? "").toLowerCase().replace(/\s+/g, "");
+    if (normalizedTeamName.includes(fragment) && m.feeEarnerFullName) {
       names.add(m.feeEarnerFullName);
     }
   }
