@@ -132,6 +132,29 @@ export async function fetchMoveHubMatters(): Promise<IntouchMatter[]> {
   return matters.filter((m) => isMoveHubTeam(m) && m.state !== "Aborted");
 }
 
+/**
+ * Looks up the fee earner name(s) InTouch currently reports for a team, by a
+ * case-insensitive substring match on feeEarnerTeamName (e.g. "fenchurch"
+ * matches "Move Hub Team Fenchurch" regardless of exact spacing/casing).
+ * Only paginates the plain matter list — no per-matter task lookups — so
+ * this is fast (a handful of requests) rather than a full completion sync.
+ * Usually returns exactly one name; more than one can mean a placeholder
+ * name is mid-transition to a real one, or the team fragment is ambiguous.
+ */
+export async function findFeeEarnerNamesForTeam(teamFragment: string): Promise<string[]> {
+  const fragment = teamFragment.trim().toLowerCase();
+  if (!fragment) return [];
+
+  const matters = await fetchMoveHubMatters();
+  const names = new Set<string>();
+  for (const m of matters) {
+    if ((m.feeEarnerTeamName ?? "").toLowerCase().includes(fragment) && m.feeEarnerFullName) {
+      names.add(m.feeEarnerFullName);
+    }
+  }
+  return Array.from(names);
+}
+
 /** Looks up a single matter's task checklist and returns its completion date, if done. */
 export async function getCompletionDate(matterGuid: string): Promise<Date | null> {
   const body = await intouchFetch(`/matters/${matterGuid}/tasks`);

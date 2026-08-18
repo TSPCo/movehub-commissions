@@ -76,6 +76,18 @@ export function UsersClient({
 
   const [inviteForm, setInviteForm] = useState({ email: "", role: "STAFF", intouchFeeEarnerName: "" });
   const [inviting, setInviting] = useState(false);
+  const [lookups, setLookups] = useState<Record<string, { loading: boolean; names: string[] | null; error: string | null }>>({});
+
+  async function lookupFeeEarner(id: string) {
+    setLookups((prev) => ({ ...prev, [id]: { loading: true, names: null, error: null } }));
+    const res = await fetch(`/api/admin/users/${id}/lookup-fee-earner`, { method: "POST" });
+    const body = await res.json();
+    if (!res.ok) {
+      setLookups((prev) => ({ ...prev, [id]: { loading: false, names: null, error: body.error || "Lookup failed" } }));
+      return;
+    }
+    setLookups((prev) => ({ ...prev, [id]: { loading: false, names: body.names, error: body.names.length === 0 ? "No matters found on InTouch for this team yet." : null } }));
+  }
 
   async function updateUser(id: string, data: Record<string, unknown>) {
     setError(null);
@@ -345,17 +357,49 @@ export function UsersClient({
                   </select>
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    type="text"
-                    defaultValue={u.intouchFeeEarnerName ?? ""}
-                    title={`Must exactly match this person's name in InTouch (e.g. "Sam Rodgers") so their completions get attributed correctly. Can be added later.`}
-                    placeholder="Not set"
-                    onBlur={(e) => {
-                      const val = e.target.value;
-                      if (val !== (u.intouchFeeEarnerName ?? "")) updateUser(u.id, { intouchFeeEarnerName: val });
-                    }}
-                    className="w-36 px-2 py-1 text-xs"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      key={u.intouchFeeEarnerName ?? ""}
+                      type="text"
+                      defaultValue={u.intouchFeeEarnerName ?? ""}
+                      title={`Must exactly match this person's name in InTouch (e.g. "Sam Rodgers") so their completions get attributed correctly. Can be added later.`}
+                      placeholder="Not set"
+                      onBlur={(e) => {
+                        const val = e.target.value;
+                        if (val !== (u.intouchFeeEarnerName ?? "")) updateUser(u.id, { intouchFeeEarnerName: val });
+                      }}
+                      className="w-36 px-2 py-1 text-xs"
+                    />
+                    <button
+                      onClick={() => lookupFeeEarner(u.id)}
+                      disabled={lookups[u.id]?.loading}
+                      title="Look up the current name InTouch reports for this team"
+                      className="text-xs font-medium shrink-0"
+                      style={{ color: "var(--cyan)" }}
+                    >
+                      {lookups[u.id]?.loading ? "Looking…" : "Look up"}
+                    </button>
+                  </div>
+                  {lookups[u.id]?.error && (
+                    <p className="mt-1 text-xs" style={{ color: "var(--danger)" }}>{lookups[u.id]?.error}</p>
+                  )}
+                  {lookups[u.id]?.names && lookups[u.id]!.names!.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {lookups[u.id]!.names!.map((name) => (
+                        <button
+                          key={name}
+                          onClick={() => {
+                            updateUser(u.id, { intouchFeeEarnerName: name });
+                            setLookups((prev) => ({ ...prev, [u.id]: { loading: false, names: null, error: null } }));
+                          }}
+                          className="rounded-full px-2 py-0.5 text-xs font-medium"
+                          style={{ background: "rgba(34,197,94,0.15)", color: "var(--success)" }}
+                        >
+                          Use &ldquo;{name}&rdquo;
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   {u.status === "INVITED" ? (
