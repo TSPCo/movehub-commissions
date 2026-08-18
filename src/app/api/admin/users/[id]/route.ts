@@ -78,6 +78,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     await notifyPeer(data.status === "ACTIVE" ? "enabled" : "disabled", { email: user.email, role: user.role });
   }
 
+  // Backfill: completionSync only matches a matter to a user at the moment it's
+  // first imported and never re-checks existing rows, so anything synced while
+  // this name was wrong or unset is stuck with userId: null forever otherwise.
+  // Without this, "fix the mismatch by correcting the fee earner name" (the
+  // promise made in the schema comment and the admin warning banner) isn't
+  // actually true for anything already synced.
+  if (typeof data.intouchFeeEarnerName === "string" && data.intouchFeeEarnerName) {
+    await db.completedMatter.updateMany({
+      where: { userId: null, handlerName: { equals: data.intouchFeeEarnerName, mode: "insensitive" } },
+      data: { userId: user.id },
+    });
+  }
+
   return NextResponse.json({ user });
 }
 
