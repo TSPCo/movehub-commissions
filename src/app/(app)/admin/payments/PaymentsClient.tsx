@@ -21,6 +21,7 @@ type Row = {
   lifetimeEarnedPence: number;
   totalPaidPence: number;
   outstandingPence: number;
+  unpaidInvoicePence: number;
   invoices: Invoice[];
 };
 
@@ -92,12 +93,13 @@ export function PaymentsClient() {
               <th className="px-4 py-3 text-left font-medium" style={{ color: "var(--text-secondary)" }}>Earned to date</th>
               <th className="px-4 py-3 text-left font-medium" style={{ color: "var(--text-secondary)" }}>Paid</th>
               <th className="px-4 py-3 text-left font-medium" style={{ color: "var(--text-secondary)" }}>Outstanding</th>
+              <th className="px-4 py-3 text-left font-medium" style={{ color: "var(--text-secondary)" }}>Unpaid invoices</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center" style={{ color: "var(--text-muted)" }}>Loading…</td>
+                <td colSpan={6} className="px-4 py-8 text-center" style={{ color: "var(--text-muted)" }}>Loading…</td>
               </tr>
             )}
             {!loading &&
@@ -114,7 +116,7 @@ export function PaymentsClient() {
               ))}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                <td colSpan={6} className="px-4 py-8 text-center" style={{ color: "var(--text-muted)" }}>
                   No staff with an InTouch fee earner name set yet — add one on the Staff page.
                 </td>
               </tr>
@@ -179,10 +181,13 @@ function RowGroup({
         <td className="px-4 py-3 font-semibold" style={{ color: row.outstandingPence > 0 ? "var(--cyan)" : "var(--text-muted)" }}>
           {formatPence(row.outstandingPence)}
         </td>
+        <td className="px-4 py-3 font-semibold" style={{ color: row.unpaidInvoicePence > 0 ? "var(--warning)" : "var(--text-muted)" }}>
+          {row.unpaidInvoicePence > 0 ? formatPence(row.unpaidInvoicePence) : "—"}
+        </td>
       </tr>
       {expanded && (
         <tr style={{ borderBottom: "1px solid var(--border)" }}>
-          <td colSpan={5} className="px-4 py-4" style={{ background: "rgba(255,255,255,0.02)" }}>
+          <td colSpan={6} className="px-4 py-4" style={{ background: "rgba(255,255,255,0.02)" }}>
             <form onSubmit={handleUpload} className="mb-4 flex flex-wrap items-end gap-3" onClick={(e) => e.stopPropagation()}>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Amount</label>

@@ -30,6 +30,7 @@ export async function GET() {
     users.map(async (u) => {
       const lifetimeEarnedPence = await getLifetimeEarnedPence(u.id);
       const totalPaidPence = u.invoices.filter((i) => i.status === "PAID").reduce((sum, i) => sum + i.amountPence, 0);
+      const unpaidInvoicePence = u.invoices.filter((i) => i.status === "PENDING").reduce((sum, i) => sum + i.amountPence, 0);
       return {
         userId: u.id,
         name: u.name ?? u.email,
@@ -37,6 +38,7 @@ export async function GET() {
         lifetimeEarnedPence,
         totalPaidPence,
         outstandingPence: lifetimeEarnedPence - totalPaidPence,
+        unpaidInvoicePence,
         invoices: u.invoices.map((i) => ({
           ...i,
           createdAt: i.createdAt.toISOString(),
