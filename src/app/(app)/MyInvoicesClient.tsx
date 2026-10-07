@@ -13,7 +13,17 @@ type Invoice = {
   createdAt: string;
 };
 
+type Bonus = {
+  id: string;
+  amountPence: number;
+  note: string;
+  awardedAt: string;
+};
+
 type InvoicesData = {
+  commissionEarnedPence: number;
+  bonusPence: number;
+  bonuses: Bonus[];
   lifetimeEarnedPence: number;
   totalPaidPence: number;
   outstandingPence: number;
@@ -85,14 +95,33 @@ export function MyInvoicesClient() {
       <h2 className="mb-3 text-sm font-semibold">My invoices</h2>
 
       <div className="mb-4 grid grid-cols-3 gap-4">
-        <StatCard label="Earned to date" value={formatPence(data.lifetimeEarnedPence)} />
+        <StatCard
+          label="Earned to date"
+          value={formatPence(data.lifetimeEarnedPence)}
+          hint={data.bonusPence > 0 ? `${formatPence(data.commissionEarnedPence)} commission + ${formatPence(data.bonusPence)} bonus` : undefined}
+        />
         <StatCard label="Paid" value={formatPence(data.totalPaidPence)} />
         <StatCard label="Outstanding" value={formatPence(data.outstandingPence)} accent />
       </div>
 
+      {data.bonuses.length > 0 && (
+        <div className="card mb-4 p-4">
+          <p className="mb-2 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>Bonuses</p>
+          <ul className="text-xs">
+            {data.bonuses.map((b) => (
+              <li key={b.id} className="flex items-center gap-3 py-1">
+                <span className="w-16 font-medium">{formatPence(b.amountPence)}</span>
+                <span className="flex-1" style={{ color: "var(--text-secondary)" }}>{b.note}</span>
+                <span style={{ color: "var(--text-muted)" }}>{new Date(b.awardedAt).toLocaleDateString("en-GB")}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="card mb-4 p-5">
         <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
-          Submit an invoice for what&apos;s owed.
+          Submit an invoice for what&apos;s owed{data.bonusPence > 0 ? " — this includes any bonuses above, so you can invoice them together with your commission" : ""}.
         </p>
         <form onSubmit={handleUpload} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
@@ -183,11 +212,12 @@ export function MyInvoicesClient() {
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function StatCard({ label, value, accent, hint }: { label: string; value: string; accent?: boolean; hint?: string }) {
   return (
     <div className="card p-4">
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</p>
       <p className="mt-1 text-xl font-bold" style={{ color: accent ? "var(--cyan)" : "white" }}>{value}</p>
+      {hint && <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>{hint}</p>}
     </div>
   );
 }

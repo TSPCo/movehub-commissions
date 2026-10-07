@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getLifetimeEarnedPence, MAX_INVOICE_FILE_BYTES, ALLOWED_INVOICE_MIME_TYPES } from "@/lib/payments";
+import { getEarnedBreakdown, MAX_INVOICE_FILE_BYTES, ALLOWED_INVOICE_MIME_TYPES } from "@/lib/payments";
 import { formatPence } from "@/lib/money";
 
 export async function GET() {
@@ -14,13 +14,23 @@ export async function GET() {
     select: { id: true, amountPence: true, fileName: true, status: true, paidAt: true, createdAt: true },
   });
 
-  const lifetimeEarnedPence = await getLifetimeEarnedPence(session.sub);
+  const [earned, bonuses] = await Promise.all([
+    getEarnedBreakdown(session.sub),
+    db.bonusPayment.findMany({
+      where: { userId: session.sub },
+      orderBy: { awardedAt: "desc" },
+      select: { id: true, amountPence: true, note: true, awardedAt: true },
+    }),
+  ]);
   const totalPaidPence = invoices.filter((i) => i.status === "PAID").reduce((sum, i) => sum + i.amountPence, 0);
 
   return NextResponse.json({
-    lifetimeEarnedPence,
+    commissionEarnedPence: earned.commissionPence,
+    bonusPence: earned.bonusPence,
+    lifetimeEarnedPence: earned.totalPence,
     totalPaidPence,
-    outstandingPence: lifetimeEarnedPence - totalPaidPence,
+    outstandingPence: earned.totalPence - totalPaidPence,
+    bonuses: bonuses.map((b) => ({ ...b, awardedAt: b.awardedAt.toISOString() })),
     invoices: invoices.map((i) => ({ ...i, createdAt: i.createdAt.toISOString(), paidAt: i.paidAt?.toISOString() ?? null })),
   });
 }
@@ -51,17 +61,17 @@ export async function POST(request: NextRequest) {
   // has actually been earned, minus anything already invoiced (paid or still
   // pending) — the pending half of that matters too, or someone could submit
   // the same amount twice before the first one's marked paid.
-  const [lifetimeEarnedPence, existingInvoices] = await Promise.all([
-    getLifetimeEarnedPence(session.sub),
+  const [earned, existingInvoices] = await Promise.all([
+    getEarnedBreakdown(session.sub),
     db.staffInvoice.findMany({ where: { userId: session.sub }, select: { amountPence: true } }),
   ]);
   const alreadyInvoicedPence = existingInvoices.reduce((sum, i) => sum + i.amountPence, 0);
-  const availablePence = lifetimeEarnedPence - alreadyInvoicedPence;
+  const availablePence = earned.totalPence - alreadyInvoicedPence;
 
   if (amountPence > availablePence) {
     return NextResponse.json(
       {
-        error: `That's more than you're currently owed — based on completed matters, you can invoice up to ${formatPence(Math.max(availablePence, 0))}.`,
+        error: `That's more than you're currently owed — based on completed matters and any bonuses, you can invoice up to ${formatPence(Math.max(availablePence, 0))}.`,
       },
       { status: 400 }
     );

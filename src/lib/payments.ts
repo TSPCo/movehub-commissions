@@ -49,5 +49,22 @@ export async function getLifetimeEarnedPence(userId: string): Promise<number> {
   return total;
 }
 
+/** Sum of ad-hoc bonuses awarded to this user (see BonusPayment in schema.prisma). */
+export async function getBonusPence(userId: string): Promise<number> {
+  const agg = await db.bonusPayment.aggregate({ where: { userId }, _sum: { amountPence: true } });
+  return agg._sum.amountPence ?? 0;
+}
+
+/**
+ * Everything this person is owed to date: completion commission plus any
+ * ad-hoc bonuses. Staff invoice the two together, so "outstanding" and the
+ * staff invoice cap both work off the combined total, while the breakdown is
+ * kept so the UI can show where the figure comes from.
+ */
+export async function getEarnedBreakdown(userId: string) {
+  const [commissionPence, bonusPence] = await Promise.all([getLifetimeEarnedPence(userId), getBonusPence(userId)]);
+  return { commissionPence, bonusPence, totalPence: commissionPence + bonusPence };
+}
+
 export const MAX_INVOICE_FILE_BYTES = 10 * 1024 * 1024;
 export const ALLOWED_INVOICE_MIME_TYPES = ["application/pdf", "image/png", "image/jpeg"];

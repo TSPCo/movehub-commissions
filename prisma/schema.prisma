@@ -62,6 +62,8 @@ model User {
   completedMatters      CompletedMatter[]
   invoices              StaffInvoice[]         @relation("InvoiceOwner")
   uploadedInvoices      StaffInvoice[]         @relation("InvoiceUploader")
+  bonuses               BonusPayment[]         @relation("BonusOwner")
+  recordedBonuses       BonusPayment[]         @relation("BonusRecorder")
 }
 
 model PasswordResetRequest {
@@ -146,6 +148,31 @@ model StaffInvoice {
   // admin who happened to upload it, same precedent as CompletedMatter.
   user       User? @relation("InvoiceOwner", fields: [userId], references: [id], onDelete: SetNull)
   uploadedBy User? @relation("InvoiceUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+}
+
+// ─── Ad-hoc bonuses ─────────────────────────────────────────────────────────
+// A one-off amount owed to someone that has nothing to do with completions
+// (e.g. a discretionary bonus). It counts towards what they're owed — staff
+// invoice it alongside their regular commission, so the invoice sense-check
+// and "outstanding" both need to include it — but it's kept as its own record
+// rather than folded into commission, so the monthly commission figures stay
+// purely completion-driven.
+
+model BonusPayment {
+  id           String   @id @default(cuid())
+  userId       String?
+  recordedById String?
+  amountPence  Int
+  note         String
+  awardedAt    DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  // SetNull on both, same precedent as StaffInvoice: financial history
+  // outlives the login of whoever it was for or whoever recorded it.
+  user       User? @relation("BonusOwner", fields: [userId], references: [id], onDelete: SetNull)
+  recordedBy User? @relation("BonusRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@index([userId])
 }
