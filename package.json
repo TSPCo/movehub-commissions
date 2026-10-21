@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3461",
     "build": "next build",
-    "start": "next start",
+    "start": "(prisma db push || echo 'prisma db push failed - starting anyway') && next start",
     "lint": "eslint",
     "postinstall": "node scripts/postinstall.mjs",
     "db:push": "prisma db push",
