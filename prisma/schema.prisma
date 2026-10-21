@@ -25,6 +25,15 @@ enum ResetRequestStatus {
   USED
 }
 
+// Result of automatically checking an uploaded invoice against our completion
+// data (see src/lib/invoiceCheck.ts). Advisory only — never blocks an upload.
+enum InvoiceCheckStatus {
+  NOT_CHECKED
+  PASSED
+  FLAGGED
+  UNREADABLE
+}
+
 enum InvoiceStatus {
   PENDING
   PAID
@@ -142,6 +151,10 @@ model StaffInvoice {
   status       InvoiceStatus @default(PENDING)
   paidAt       DateTime?
   createdAt    DateTime      @default(now())
+
+  checkStatus InvoiceCheckStatus @default(NOT_CHECKED)
+  checkResult Json?
+  checkedAt   DateTime?
 
   // Both SetNull (not the invoice's own delete) so a payment record — real
   // financial history — outlives either the staff member's login or the

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { runInvoiceCheck } from "@/lib/invoiceCheck";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getEarnedBreakdown, MAX_INVOICE_FILE_BYTES, ALLOWED_INVOICE_MIME_TYPES } from "@/lib/payments";
@@ -24,6 +25,9 @@ export async function GET() {
           status: true,
           paidAt: true,
           createdAt: true,
+          checkStatus: true,
+          checkResult: true,
+          checkedAt: true,
           uploadedBy: { select: { name: true, email: true } },
         },
       },
@@ -50,6 +54,7 @@ export async function GET() {
           ...i,
           createdAt: i.createdAt.toISOString(),
           paidAt: i.paidAt?.toISOString() ?? null,
+          checkedAt: i.checkedAt?.toISOString() ?? null,
         })),
       };
     })
@@ -99,6 +104,10 @@ export async function POST(request: NextRequest) {
       fileData,
     },
   });
+
+  // Runs after the response is sent — reading the file takes a few seconds and
+  // the result is advisory, so the upload itself never waits on it.
+  after(() => runInvoiceCheck(invoice.id).catch((err) => console.error("Invoice check failed", invoice.id, err)));
 
   return NextResponse.json(
     {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { RefreshCw, CalendarClock, AlertTriangle } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import { RefreshCw, CalendarClock, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 import { formatPence } from "@/lib/money";
 
 const MONTH_NAMES = [
@@ -9,12 +9,24 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+type Matter = { id: string; address: string; postcode: string | null; completionDate: string };
+type UnmatchedMatter = Matter & { handlerName: string | null };
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+function addressLabel(m: Matter) {
+  return [m.address, m.postcode].filter(Boolean).join(", ");
+}
+
 type Row = {
   userId: string;
   name: string;
   email: string;
   fileCountAtStart: number | null;
   completions: number;
+  matters: Matter[];
   calc: { basePence: number; bonusThreshold: number | null; bonusHit: boolean; bonusPence: number; totalPence: number };
 };
 
@@ -29,6 +41,8 @@ export function AdminCommissionsClient() {
   const [rows, setRows] = useState<Row[]>([]);
   const [totalOwedPence, setTotalOwedPence] = useState(0);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
+  const [unmatched, setUnmatched] = useState<UnmatchedMatter[]>([]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [snapshotting, setSnapshotting] = useState(false);
@@ -44,11 +58,21 @@ export function AdminCommissionsClient() {
         setRows(data.rows ?? []);
         setTotalOwedPence(data.totalOwedPence ?? 0);
         setUnmatchedCount(data.unmatchedCount ?? 0);
+        setUnmatched(data.unmatched ?? []);
         setLoading(false);
       });
   }
 
   useEffect(load, [year, month]);
+
+  function toggleExpanded(userId: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
 
   async function handleSync() {
     setSyncing(true);
@@ -135,6 +159,24 @@ export function AdminCommissionsClient() {
         </div>
       )}
 
+      {!loading && unmatched.length > 0 && (
+        <div className="card mb-6 overflow-hidden">
+          <div className="px-4 py-3 text-sm font-semibold" style={{ borderBottom: "1px solid var(--border)" }}>
+            Unattributed completions
+          </div>
+          <ul className="text-sm">
+            {unmatched.map((m) => (
+              <li key={m.id} className="flex items-center justify-between gap-4 px-4 py-2" style={{ borderBottom: "1px solid var(--border)" }}>
+                <span>{addressLabel(m)}</span>
+                <span style={{ color: "var(--text-secondary)" }}>
+                  {m.handlerName ?? "No fee earner"} · {formatDate(m.completionDate)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="card mb-6 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
           <h2 className="text-sm font-semibold">Commission by team member</h2>
@@ -158,24 +200,57 @@ export function AdminCommissionsClient() {
               </tr>
             )}
             {!loading &&
-              rows.map((r) => (
-                <tr key={r.userId} className="table-row-hover" style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td className="px-4 py-3 font-medium">{r.name}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--text-secondary)" }}>{r.fileCountAtStart ?? "—"}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--text-secondary)" }}>{r.completions}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--text-secondary)" }}>{r.calc.bonusThreshold ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    {r.calc.bonusThreshold == null ? (
-                      <span style={{ color: "var(--text-muted)" }}>—</span>
-                    ) : r.calc.bonusHit ? (
-                      <span className="badge" style={{ background: "rgba(34,197,94,0.15)", color: "var(--success)" }}>Yes</span>
-                    ) : (
-                      <span className="badge" style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-secondary)" }}>No</span>
+              rows.map((r) => {
+                const isOpen = expanded.has(r.userId);
+                const Chevron = isOpen ? ChevronDown : ChevronRight;
+                return (
+                  <Fragment key={r.userId}>
+                    <tr
+                      className="table-row-hover cursor-pointer"
+                      style={{ borderBottom: "1px solid var(--border)" }}
+                      onClick={() => toggleExpanded(r.userId)}
+                    >
+                      <td className="px-4 py-3 font-medium">
+                        <span className="flex items-center gap-1.5">
+                          <Chevron className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
+                          {r.name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3" style={{ color: "var(--text-secondary)" }}>{r.fileCountAtStart ?? "—"}</td>
+                      <td className="px-4 py-3" style={{ color: "var(--text-secondary)" }}>{r.completions}</td>
+                      <td className="px-4 py-3" style={{ color: "var(--text-secondary)" }}>{r.calc.bonusThreshold ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        {r.calc.bonusThreshold == null ? (
+                          <span style={{ color: "var(--text-muted)" }}>—</span>
+                        ) : r.calc.bonusHit ? (
+                          <span className="badge" style={{ background: "rgba(34,197,94,0.15)", color: "var(--success)" }}>Yes</span>
+                        ) : (
+                          <span className="badge" style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-secondary)" }}>No</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-semibold" style={{ color: "var(--cyan)" }}>{formatPence(r.calc.totalPence)}</td>
+                    </tr>
+                    {isOpen && (
+                      <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                        <td colSpan={6} className="px-4 py-3">
+                          {r.matters.length === 0 ? (
+                            <span style={{ color: "var(--text-muted)" }}>No completions this month.</span>
+                          ) : (
+                            <ul className="space-y-1">
+                              {r.matters.map((m) => (
+                                <li key={m.id} className="flex justify-between gap-4">
+                                  <span>{addressLabel(m)}</span>
+                                  <span style={{ color: "var(--text-secondary)" }}>{formatDate(m.completionDate)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                  <td className="px-4 py-3 font-semibold" style={{ color: "var(--cyan)" }}>{formatPence(r.calc.totalPence)}</td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             {!loading && rows.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center" style={{ color: "var(--text-muted)" }}>

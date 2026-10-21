@@ -1,8 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Download, Trash2 } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import { ChevronDown, ChevronRight, Download, RefreshCw, Trash2 } from "lucide-react";
 import { formatPence } from "@/lib/money";
+
+type CheckLine = {
+  address: string;
+  postcode: string | null;
+  amountPence: number | null;
+  outcome: "MATCHED" | "ALREADY_INVOICED" | "OTHER_STAFF" | "NOT_FOUND";
+  matchedAddress?: string;
+  completionDate?: string;
+  matchedOwner?: string | null;
+};
+
+type CheckResult = {
+  invoiceTotalPence?: number | null;
+  expectedBasePence?: number;
+  expectedMaxPence?: number;
+  lines?: CheckLine[];
+  uninvoicedCompletions?: { id: string; address: string; postcode: string | null; completionDate: string }[];
+  flags?: string[];
+} | null;
+
+const CHECK_BADGES = {
+  NOT_CHECKED: { label: "Not checked", background: "rgba(255,255,255,0.06)", color: "var(--text-muted)" },
+  PASSED: { label: "Checks out", background: "rgba(34,197,94,0.15)", color: "var(--success)" },
+  FLAGGED: { label: "Needs review", background: "rgba(245,158,11,0.15)", color: "var(--warning)" },
+  UNREADABLE: { label: "Couldn't read", background: "rgba(239,68,68,0.15)", color: "var(--danger)" },
+} as const;
+
+const OUTCOME_LABELS: Record<CheckLine["outcome"], string> = {
+  MATCHED: "Verified",
+  ALREADY_INVOICED: "Already invoiced",
+  OTHER_STAFF: "Someone else's",
+  NOT_FOUND: "Not found",
+};
 
 type Invoice = {
   id: string;
@@ -11,6 +44,9 @@ type Invoice = {
   status: "PENDING" | "PAID";
   paidAt: string | null;
   createdAt: string;
+  checkStatus: keyof typeof CHECK_BADGES;
+  checkResult: CheckResult;
+  checkedAt: string | null;
   uploadedBy: { name: string | null; email: string } | null;
 };
 
@@ -177,6 +213,15 @@ function RowGroup({
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [openCheck, setOpenCheck] = useState<string | null>(null);
+  const [rechecking, setRechecking] = useState<string | null>(null);
+
+  async function handleRecheck(id: string) {
+    setRechecking(id);
+    await fetch(`/api/admin/payments/${id}/check`, { method: "POST" });
+    setRechecking(null);
+    onUploaded();
+  }
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -315,13 +360,15 @@ function RowGroup({
                     <th className="px-2 py-2 text-left font-medium" style={{ color: "var(--text-muted)" }}>File</th>
                     <th className="px-2 py-2 text-left font-medium" style={{ color: "var(--text-muted)" }}>Uploaded by</th>
                     <th className="px-2 py-2 text-left font-medium" style={{ color: "var(--text-muted)" }}>Submitted</th>
+                    <th className="px-2 py-2 text-left font-medium" style={{ color: "var(--text-muted)" }}>Check</th>
                     <th className="px-2 py-2 text-left font-medium" style={{ color: "var(--text-muted)" }}>Status</th>
                     <th className="px-2 py-2 text-left font-medium" style={{ color: "var(--text-muted)" }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {row.invoices.map((inv) => (
-                    <tr key={inv.id} style={{ borderBottom: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
+                    <Fragment key={inv.id}>
+                    <tr style={{ borderBottom: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
                       <td className="px-2 py-2 font-medium">{formatPence(inv.amountPence)}</td>
                       <td className="px-2 py-2">
                         <a
@@ -338,6 +385,15 @@ function RowGroup({
                       </td>
                       <td className="px-2 py-2" style={{ color: "var(--text-secondary)" }}>
                         {new Date(inv.createdAt).toLocaleDateString("en-GB")}
+                      </td>
+                      <td className="px-2 py-2">
+                        <button
+                          onClick={() => setOpenCheck(openCheck === inv.id ? null : inv.id)}
+                          className="badge"
+                          style={{ background: CHECK_BADGES[inv.checkStatus].background, color: CHECK_BADGES[inv.checkStatus].color }}
+                        >
+                          {CHECK_BADGES[inv.checkStatus].label}
+                        </button>
                       </td>
                       <td className="px-2 py-2">
                         {inv.status === "PAID" ? (
@@ -364,6 +420,18 @@ function RowGroup({
                         </button>
                       </td>
                     </tr>
+                    {openCheck === inv.id && (
+                      <tr style={{ borderBottom: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
+                        <td colSpan={7} className="px-2 py-3">
+                          <InvoiceCheckDetails
+                            invoice={inv}
+                            rechecking={rechecking === inv.id}
+                            onRecheck={() => handleRecheck(inv.id)}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -372,5 +440,82 @@ function RowGroup({
         </tr>
       )}
     </>
+  );
+}
+
+function InvoiceCheckDetails({
+  invoice,
+  rechecking,
+  onRecheck,
+}: {
+  invoice: Invoice;
+  rechecking: boolean;
+  onRecheck: () => void;
+}) {
+  const result = invoice.checkResult;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <span style={{ color: "var(--text-muted)" }}>
+          {invoice.checkStatus === "NOT_CHECKED"
+            ? "This invoice hasn't been checked yet (the AI reader may not be configured, or the check hasn't run)."
+            : `Checked ${invoice.checkedAt ? new Date(invoice.checkedAt).toLocaleString("en-GB") : ""}`}
+        </span>
+        <button onClick={onRecheck} disabled={rechecking} className="btn-secondary flex items-center gap-1 px-2 py-1">
+          <RefreshCw className={`h-3 w-3 ${rechecking ? "animate-spin" : ""}`} />
+          {rechecking ? "Checking…" : "Re-check"}
+        </button>
+      </div>
+
+      {result?.flags && result.flags.length > 0 && (
+        <ul className="list-disc space-y-1 pl-5" style={{ color: "var(--warning)" }}>
+          {result.flags.map((f, i) => (
+            <li key={i}>{f}</li>
+          ))}
+        </ul>
+      )}
+
+      {result?.lines && result.lines.length > 0 && (
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className="px-2 py-1 text-left font-medium" style={{ color: "var(--text-muted)" }}>On the invoice</th>
+              <th className="px-2 py-1 text-left font-medium" style={{ color: "var(--text-muted)" }}>Result</th>
+              <th className="px-2 py-1 text-left font-medium" style={{ color: "var(--text-muted)" }}>Matched to</th>
+              <th className="px-2 py-1 text-left font-medium" style={{ color: "var(--text-muted)" }}>Completed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.lines.map((l, i) => (
+              <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                <td className="px-2 py-1">{[l.address, l.postcode].filter(Boolean).join(", ")}</td>
+                <td className="px-2 py-1" style={{ color: l.outcome === "MATCHED" ? "var(--success)" : "var(--warning)" }}>
+                  {OUTCOME_LABELS[l.outcome]}
+                </td>
+                <td className="px-2 py-1" style={{ color: "var(--text-secondary)" }}>{l.matchedAddress ?? "—"}</td>
+                <td className="px-2 py-1" style={{ color: "var(--text-secondary)" }}>
+                  {l.completionDate ? new Date(l.completionDate).toLocaleDateString("en-GB") : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {result?.uninvoicedCompletions && result.uninvoicedCompletions.length > 0 && (
+        <div>
+          <p className="mb-1 font-medium" style={{ color: "var(--text-secondary)" }}>
+            Completed but not on any invoice yet ({result.uninvoicedCompletions.length})
+          </p>
+          <ul style={{ color: "var(--text-muted)" }}>
+            {result.uninvoicedCompletions.map((c) => (
+              <li key={c.id}>
+                {[c.address, c.postcode].filter(Boolean).join(", ")} — {new Date(c.completionDate).toLocaleDateString("en-GB")}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
