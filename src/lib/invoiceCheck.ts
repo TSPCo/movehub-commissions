@@ -101,6 +101,12 @@ export async function runInvoiceCheck(invoiceId: string): Promise<void> {
     extraction = await extractInvoice(Buffer.from(invoice.fileData), invoice.fileMimeType);
   } catch (err) {
     if (err instanceof InvoiceCheckUnavailableError) return; // stays NOT_CHECKED
+    // A rejected/revoked key or an Anthropic outage says nothing about the invoice —
+    // leave it NOT_CHECKED (re-check later) rather than calling it unreadable.
+    if (err instanceof Anthropic.APIError) {
+      console.error("Invoice check couldn't reach the AI reader", invoiceId, err.status);
+      return;
+    }
     console.error("Invoice check failed to read file", invoiceId, err);
     extraction = null;
   }
