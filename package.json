@@ -10,7 +10,8 @@
     "postinstall": "node scripts/postinstall.mjs",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test": "node --import tsx --test src/lib/addressMatch.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
