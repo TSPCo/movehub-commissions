@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { formatPence } from "@/lib/money";
-import { addressesMatch } from "@/lib/addressMatch";
+import { matchAddress, formatPostcode, type AddressMatch } from "@/lib/addressMatch";
 
 const EXTRACTION_MODEL = "claude-sonnet-5-5";
 
@@ -149,11 +149,23 @@ export async function runInvoiceCheck(invoiceId: string): Promise<void> {
     ids?.forEach((id) => claimedElsewhere.add(id));
   }
 
+  const postcodeFlags: string[] = [];
   const lines: InvoiceLineCheck[] = extraction.lines.map((line) => {
     const base = { address: line.address, postcode: line.postcode, amountPence: toPence(line.amount) };
-    const candidates = completions.filter((c) => addressesMatch(line, c));
-    const own = candidates.find((c) => c.userId === invoice.userId);
-    if (own) {
+    // Exact postcode matches first, so a one-character postcode slip never beats a real match.
+    const scored = completions
+      .map((c) => ({ c, match: matchAddress(line, c) }))
+      .filter((x): x is { c: (typeof completions)[number]; match: AddressMatch } => x.match !== null)
+      .sort((a, b) => Number(b.match.kind === "exact") - Number(a.match.kind === "exact"));
+    const candidates = scored.map((x) => x.c);
+    const ownScored = scored.find((x) => x.c.userId === invoice.userId);
+    const own = ownScored?.c;
+    if (own && ownScored) {
+      if (ownScored.match.kind === "postcode-differs") {
+        postcodeFlags.push(
+          `${line.address}: the postcode on the invoice (${formatPostcode(ownScored.match.invoicePostcode)}) differs from InTouch (${formatPostcode(ownScored.match.matterPostcode)}) — check which is right.`
+        );
+      }
       return {
         ...base,
         outcome: claimedElsewhere.has(own.id) ? "ALREADY_INVOICED" : "MATCHED",
@@ -199,6 +211,7 @@ export async function runInvoiceCheck(invoiceId: string): Promise<void> {
   for (const l of problemLines("ALREADY_INVOICED")) {
     flags.push(`${l.address} was already listed on another of their invoices.`);
   }
+  flags.push(...postcodeFlags);
   const lineAddresses = lines.filter((l) => l.outcome === "MATCHED").map((l) => l.matterId);
   if (new Set(lineAddresses).size < lineAddresses.length) {
     flags.push("The same property appears more than once on this invoice.");

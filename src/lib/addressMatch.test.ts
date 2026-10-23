@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addressesMatch } from "./addressMatch";
+import { addressesMatch, matchAddress, formatPostcode } from "./addressMatch";
 
 const line = (address: string, postcode: string | null = null) => ({ address, postcode });
 const matter = (address: string, postcode: string | null) => ({ address, postcode });
@@ -72,4 +72,59 @@ test("typo tolerance does not override a house number mismatch", () => {
 test("unrelated street with the same house number", () => {
   assert.equal(addressesMatch(line("3 Milten Close"), matter("3 Farm Drive", "DE24 0HB")), false);
   assert.equal(addressesMatch(line("23 langlands"), matter("23 Wood Lane", "M31 4LT")), false);
+});
+
+test("matchAddress: same postcode is an exact match", () => {
+  assert.deepEqual(matchAddress(line("27 Henderson Road", "NG19 9DJ"), matter("27 Henderson Road", "NG19 9DJ")), { kind: "exact" });
+  assert.deepEqual(matchAddress(line("27 Henderson Road"), matter("27 Henderson Road", "NG19 9DJ")), { kind: "exact" });
+});
+
+test("matchAddress: a postcode one character out still matches, and says so", () => {
+  assert.deepEqual(matchAddress(line("19 Chatham Road", "ST5 3QA"), matter("19 Chatham Road", "SR5 3QA")), {
+    kind: "postcode-differs",
+    invoicePostcode: "ST53QA",
+    matterPostcode: "SR53QA",
+  });
+  assert.deepEqual(matchAddress(line("4 Elm Close", "NG19 9DK"), matter("4 Elm Close", "NG19 9DJ")), {
+    kind: "postcode-differs",
+    invoicePostcode: "NG199DK",
+    matterPostcode: "NG199DJ",
+  });
+});
+
+test("matchAddress: the one-character slip can come from the address text", () => {
+  assert.equal(matchAddress(line("19 Chatham Road ST5 3QA"), matter("19 Chatham Road", "SR5 3QA"))?.kind, "postcode-differs");
+});
+
+test("matchAddress: street typos are still tolerated alongside a one-character postcode slip", () => {
+  assert.equal(matchAddress(line("1 savil drive", "WF4 6JQ"), matter("1 Savile Drive", "WF4 6JP"))?.kind, "postcode-differs");
+});
+
+test("matchAddress: two or more characters out is a different postcode", () => {
+  assert.equal(matchAddress(line("19 Chatham Road", "ST5 3QB"), matter("19 Chatham Road", "SR5 3QA")), null);
+  assert.equal(matchAddress(line("19 Chatham Road", "NG19 9DJ"), matter("19 Chatham Road", "SR5 3QA")), null);
+});
+
+test("matchAddress: a different length postcode is not a one-character slip", () => {
+  assert.equal(matchAddress(line("19 Chatham Road", "ST15 3QA"), matter("19 Chatham Road", "ST5 3QA")), null);
+});
+
+test("matchAddress: a one-character postcode slip never rescues a different property", () => {
+  assert.equal(matchAddress(line("20 Chatham Road", "ST5 3QA"), matter("19 Chatham Road", "SR5 3QA")), null);
+  assert.equal(matchAddress(line("19 Chatsworth Avenue", "ST5 3QA"), matter("19 Chatham Road", "SR5 3QA")), null);
+  assert.equal(matchAddress(line("19 Chatham View", "ST5 3QA"), matter("19 Chatham Road", "SR5 3QA")), null);
+  assert.equal(matchAddress(line("5 Hill Lane", "ST5 3QA"), matter("5 Mill Lane", "SR5 3QA")), null);
+});
+
+test("matchAddress: a postcode slip needs real words to corroborate, not just numbers", () => {
+  assert.equal(matchAddress(line("12", "ST5 3QA"), matter("12", "SR5 3QA")), null);
+});
+
+test("addressesMatch only reports exact matches", () => {
+  assert.equal(addressesMatch(line("19 Chatham Road", "ST5 3QA"), matter("19 Chatham Road", "SR5 3QA")), false);
+});
+
+test("formatPostcode puts the space back", () => {
+  assert.equal(formatPostcode("ST53QA"), "ST5 3QA");
+  assert.equal(formatPostcode("NG199DJ"), "NG19 9DJ");
 });

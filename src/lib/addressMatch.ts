@@ -58,18 +58,48 @@ export interface AddressLike {
   postcode?: string | null;
 }
 
+export type AddressMatch =
+  | { kind: "exact" }
+  /** Address and house number match but the postcodes are one character apart. */
+  | { kind: "postcode-differs"; invoicePostcode: string; matterPostcode: string };
+
+export function formatPostcode(normalized: string): string {
+  return `${normalized.slice(0, -3)} ${normalized.slice(-3)}`;
+}
+
+function oneCharacterApart(a: string, b: string): boolean {
+  return a.length === b.length && [...a].filter((ch, i) => ch !== b[i]).length === 1;
+}
+
 /**
  * Fuzzy match between an address as written on an invoice and an address
  * from InTouch. Both sides are free text (InTouch's line 1 sometimes carries
  * the town too), so this is deliberately tolerant on wording but strict on
  * the two things that identify a property: the postcode (when both sides
  * give one) and every house/flat number.
+ *
+ * A postcode that is a single character out (SR5 vs ST5) is most likely a
+ * typo, so it still matches — but only when the address text matches in full
+ * without the postcode's help — and the result says so for the caller to flag.
  */
-export function addressesMatch(invoiceLine: AddressLike, matter: AddressLike): boolean {
+export function matchAddress(invoiceLine: AddressLike, matter: AddressLike): AddressMatch | null {
   const invPostcode = normalizePostcode(invoiceLine.postcode) ?? normalizePostcode(invoiceLine.address);
   const matterPostcode = normalizePostcode(matter.postcode) ?? normalizePostcode(matter.address);
-  if (invPostcode && matterPostcode && invPostcode !== matterPostcode) return false;
 
+  if (invPostcode && matterPostcode && invPostcode !== matterPostcode) {
+    if (!oneCharacterApart(invPostcode, matterPostcode)) return null;
+    if (!addressTextMatches(invoiceLine, matter, false)) return null;
+    return { kind: "postcode-differs", invoicePostcode: invPostcode, matterPostcode };
+  }
+  const postcodeAgrees = !!invPostcode && invPostcode === matterPostcode;
+  return addressTextMatches(invoiceLine, matter, postcodeAgrees) ? { kind: "exact" } : null;
+}
+
+export function addressesMatch(invoiceLine: AddressLike, matter: AddressLike): boolean {
+  return matchAddress(invoiceLine, matter)?.kind === "exact";
+}
+
+function addressTextMatches(invoiceLine: AddressLike, matter: AddressLike, postcodeAgrees: boolean): boolean {
   const invTokens = new Set(tokens(invoiceLine.address));
   const matterTokens = tokens(matter.address);
 
@@ -77,7 +107,7 @@ export function addressesMatch(invoiceLine: AddressLike, matter: AddressLike): b
   if (matterNumbers.some((n) => !invTokens.has(n))) return false;
 
   const matterWords = matterTokens.filter((t) => !/\d/.test(t) && t.length > 2);
-  if (matterWords.length === 0) return matterNumbers.length > 0 && !!invPostcode && invPostcode === matterPostcode;
+  if (matterWords.length === 0) return matterNumbers.length > 0 && postcodeAgrees;
 
   // The street name is the first word after the house number; the town word
   // alone must never be enough (31 Mill Lane ≠ 31 Hoplands Road, same town).
@@ -87,7 +117,6 @@ export function addressesMatch(invoiceLine: AddressLike, matter: AddressLike): b
   const invHas = (w: string) => invWords.some((t) => wordsClose(t, w));
   if (streetKey && !invHas(streetKey)) return false;
 
-  const postcodeAgrees = !!invPostcode && invPostcode === matterPostcode;
   // Same postcode and same numbers already pins the property down to a handful
   // of doors, so one shared word is enough.
   if (postcodeAgrees) return matterWords.some(invHas);
