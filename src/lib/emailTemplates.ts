@@ -50,3 +50,36 @@ export function passwordResetEmail(opts: { name: string; resetUrl: string }) {
     ),
   };
 }
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+/**
+ * Sent to the account owner and every admin whenever bank details are saved.
+ * Deliberately shows only the last 4 digits — the full details never go by email.
+ */
+export function bankDetailsChangedEmail(opts: {
+  ownerName: string;
+  /** Who made the change, if it wasn't the owner themselves. */
+  editorName: string | null;
+  firstTime: boolean;
+  accountLast4: string;
+  at: Date;
+}) {
+  const owner = escapeHtml(opts.ownerName);
+  const by = opts.editorName ? ` by ${escapeHtml(opts.editorName)}` : "";
+  const what = opts.firstTime ? "added" : "changed";
+  const when = opts.at.toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" });
+
+  return {
+    subject: `Bank details ${what} for ${opts.ownerName}`,
+    html: layout(
+      `Bank details ${what}`,
+      `
+        <p>The bank details for <strong>${owner}</strong> in Move Hub Commissions were ${what}${by} on ${when}.</p>
+        <p>Commission will now be paid to the account ending <strong>${escapeHtml(opts.accountLast4)}</strong>.</p>
+        <p>If this wasn't expected, don't pay any invoices to the new account until you've confirmed it with ${owner} in person or by phone — not by replying to an email.</p>
+        <p style="color:#6B7280;font-size:12px;">This email goes to the account holder and every admin whenever bank details are saved.</p>
+      `
+    ),
+  };
+}

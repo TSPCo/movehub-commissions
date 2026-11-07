@@ -11,7 +11,7 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "test": "node --import tsx --test src/lib/addressMatch.test.ts"
+    "test": "node --import tsx --test src/lib/addressMatch.test.ts src/lib/bankMatch.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

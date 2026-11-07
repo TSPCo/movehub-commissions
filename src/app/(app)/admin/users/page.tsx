@@ -20,6 +20,7 @@ export default async function AdminUsersPage() {
         createdAt: true,
         peerDeleteRequestedAt: true,
         peerDeleteRequestedFrom: true,
+        bankDetails: { select: { accountNumberLast4: true } },
       },
     }),
     db.passwordResetRequest.findMany({

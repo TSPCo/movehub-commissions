@@ -3,11 +3,13 @@ import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { formatPence } from "@/lib/money";
 import { matchAddress, formatPostcode, type AddressMatch } from "@/lib/addressMatch";
+import { getBankDetails } from "@/lib/bankDetails";
+import { bankCheckFlags, compareBankDetails, type BankCheck } from "@/lib/bankMatch";
 
 const EXTRACTION_MODEL = "claude-sonnet-5-5";
 
 const EXTRACTION_PROMPT = `You are reading an invoice a staff member has submitted for commission on completed property sales.
-Extract every property listed, and the invoice total.
+Extract every property listed, the invoice total, and the bank details the invoice asks to be paid into.
 
 Return ONLY valid JSON (no markdown) in this shape, using null for anything not present:
 
@@ -15,10 +17,16 @@ Return ONLY valid JSON (no markdown) in this shape, using null for anything not 
   "totalAmount": numeric invoice total in pounds including any VAT, no currency symbols,
   "lines": [
     { "address": "full property address as written, excluding the postcode", "postcode": "postcode or null", "amount": numeric line amount in pounds or null }
-  ]
+  ],
+  "bankDetails": {
+    "accountName": "name on the bank account as written, or null",
+    "sortCode": "sort code exactly as written, or null",
+    "accountNumber": "account number exactly as written, or null"
+  }
 }
 
-If the document is not an invoice or lists no properties, return {"totalAmount": null, "lines": []}.`;
+Copy bank numbers exactly as written — never guess or fill in missing digits. If there are no bank details, set "bankDetails" to null.
+If the document is not an invoice or lists no properties, return {"totalAmount": null, "lines": [], "bankDetails": null}.`;
 
 export interface InvoiceLineCheck {
   address: string;
@@ -40,6 +48,8 @@ export interface InvoiceCheckResult {
   expectedMaxPence: number;
   /** Completions this person has that aren't on this or any other of their invoices. */
   uninvoicedCompletions: { id: string; address: string; postcode: string | null; completionDate: string }[];
+  /** Missing on checks run before bank details existed, or when BANK_DETAILS_KEY isn't set. */
+  bank?: BankCheck & { changedSinceLastPaymentAt: string | null };
   flags: string[];
 }
 
@@ -48,6 +58,7 @@ export class InvoiceCheckUnavailableError extends Error {}
 interface Extraction {
   totalAmount: number | null;
   lines: { address: string; postcode: string | null; amount: number | null }[];
+  bankDetails?: { accountName: string | null; sortCode: string | null; accountNumber: string | null } | null;
 }
 
 const toPence = (pounds: number | null | undefined) =>
@@ -229,6 +240,9 @@ export async function runInvoiceCheck(invoiceId: string): Promise<void> {
     }
   }
 
+  const bank = await checkBankDetails(invoice, extraction.bankDetails ?? null);
+  if (bank) flags.push(...bankCheckFlags(bank, bank.changedSinceLastPaymentAt ? new Date(bank.changedSinceLastPaymentAt) : null));
+
   const result: InvoiceCheckResult = {
     invoiceTotalPence,
     enteredAmountPence: invoice.amountPence,
@@ -237,6 +251,7 @@ export async function runInvoiceCheck(invoiceId: string): Promise<void> {
     expectedBasePence,
     expectedMaxPence,
     uninvoicedCompletions,
+    ...(bank ? { bank } : {}),
     flags,
   };
 
@@ -244,4 +259,38 @@ export async function runInvoiceCheck(invoiceId: string): Promise<void> {
     where: { id: invoiceId },
     data: { checkStatus: flags.length ? "FLAGGED" : "PASSED", checkResult: result as object, checkedAt: new Date() },
   });
+}
+
+/**
+ * Compares the invoice's bank details with the ones saved for its owner, and
+ * notes if those saved details changed since the owner was last paid. Returns
+ * null (skipping the bank part of the check, not failing it) if saved details
+ * can't be read — e.g. BANK_DETAILS_KEY isn't set.
+ */
+async function checkBankDetails(
+  invoice: { id: string; userId: string | null },
+  fromInvoice: Extraction["bankDetails"] | null
+): Promise<InvoiceCheckResult["bank"] | null> {
+  if (!invoice.userId) return null;
+  let saved: Awaited<ReturnType<typeof getBankDetails>>;
+  try {
+    saved = await getBankDetails(invoice.userId);
+  } catch (err) {
+    console.error("Invoice check skipped bank details", invoice.id, err instanceof Error ? err.message : err);
+    return null;
+  }
+
+  const check = compareBankDetails(saved?.details ?? null, fromInvoice ?? null);
+
+  let changedSinceLastPaymentAt: string | null = null;
+  if (saved?.lastChangedAt) {
+    const lastPaid = await db.staffInvoice.findFirst({
+      where: { userId: invoice.userId, id: { not: invoice.id }, status: "PAID", paidAt: { not: null } },
+      orderBy: { paidAt: "desc" },
+      select: { paidAt: true },
+    });
+    if (!lastPaid?.paidAt || saved.lastChangedAt > lastPaid.paidAt) changedSinceLastPaymentAt = saved.lastChangedAt.toISOString();
+  }
+
+  return { ...check, changedSinceLastPaymentAt };
 }

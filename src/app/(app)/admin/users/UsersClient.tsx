@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type UserItem = {
@@ -13,6 +14,7 @@ type UserItem = {
   createdAt: string;
   peerDeleteRequestedAt: string | null;
   peerDeleteRequestedFrom: string | null;
+  bankDetails: { accountNumberLast4: string } | null;
 };
 
 type ResetRequestItem = {
@@ -331,7 +333,7 @@ export function UsersClient({
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              {["Name", "Email", "Role", "InTouch fee earner", "Status", ""].map((h) => (
+              {["Name", "Email", "Role", "InTouch fee earner", "Status", "Bank details", ""].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
                   {h}
                 </th>
@@ -415,6 +417,17 @@ export function UsersClient({
                     >
                       {STATUS_STYLES[u.status].label}
                     </button>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {u.status !== "INVITED" && (
+                    <Link
+                      href={`/admin/users/${u.id}/bank-details`}
+                      className="text-xs font-medium"
+                      style={{ color: u.bankDetails ? "var(--cyan)" : "var(--text-muted)" }}
+                    >
+                      {u.bankDetails ? `Ending ${u.bankDetails.accountNumberLast4}` : "Not added"}
+                    </Link>
                   )}
                 </td>
                 <td className="px-4 py-3">

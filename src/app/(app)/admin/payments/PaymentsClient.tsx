@@ -20,8 +20,52 @@ type CheckResult = {
   expectedMaxPence?: number;
   lines?: CheckLine[];
   uninvoicedCompletions?: { id: string; address: string; postcode: string | null; completionDate: string }[];
+  bank?: BankCheck;
   flags?: string[];
 } | null;
+
+type BankCheck = {
+  outcome: "MATCHED" | "MISMATCH" | "NOT_ON_INVOICE" | "NO_DETAILS_ON_FILE";
+  sortCodeMatches: boolean | null;
+  accountNumberMatches: boolean | null;
+  accountNameMatches: boolean | null;
+  invoiceSortCode: string | null;
+  invoiceAccountLast4: string | null;
+  savedSortCode: string | null;
+  savedAccountLast4: string | null;
+  invoiceAccountName: string | null;
+  changedSinceLastPaymentAt: string | null;
+};
+
+const BANK_LABELS: Record<BankCheck["outcome"], { label: string; color: string }> = {
+  MATCHED: { label: "Bank details match ✓", color: "var(--success)" },
+  MISMATCH: { label: "Bank details don't match ⚠", color: "var(--danger)" },
+  NOT_ON_INVOICE: { label: "No bank details on the invoice — pay to the account on file", color: "var(--text-secondary)" },
+  NO_DETAILS_ON_FILE: { label: "No bank details saved for this person", color: "var(--warning)" },
+};
+
+function BankCheckSummary({ bank }: { bank: BankCheck }) {
+  const { label, color } = BANK_LABELS[bank.outcome];
+  const onInvoice = [bank.invoiceSortCode, bank.invoiceAccountLast4 && `ending ${bank.invoiceAccountLast4}`].filter(Boolean).join(", ");
+  const onFile = [bank.savedSortCode, bank.savedAccountLast4 && `ending ${bank.savedAccountLast4}`].filter(Boolean).join(", ");
+  return (
+    <div className="rounded-lg px-3 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+      <p className="font-medium" style={{ color }}>{label}</p>
+      {(onInvoice || onFile) && (
+        <p style={{ color: "var(--text-muted)" }}>
+          {onInvoice && <>Invoice: {onInvoice}{bank.invoiceAccountName ? ` (${bank.invoiceAccountName})` : ""}</>}
+          {onInvoice && onFile && " · "}
+          {onFile && <>On file: {onFile}</>}
+        </p>
+      )}
+      {bank.changedSinceLastPaymentAt && (
+        <p style={{ color: "var(--warning)" }}>
+          Details changed {new Date(bank.changedSinceLastPaymentAt).toLocaleDateString("en-GB")}, since their last payment.
+        </p>
+      )}
+    </div>
+  );
+}
 
 const CHECK_BADGES = {
   NOT_CHECKED: { label: "Not checked", background: "rgba(255,255,255,0.06)", color: "var(--text-muted)" },
@@ -466,6 +510,8 @@ function InvoiceCheckDetails({
           {rechecking ? "Checking…" : "Re-check"}
         </button>
       </div>
+
+      {result?.bank && <BankCheckSummary bank={result.bank} />}
 
       {result?.flags && result.flags.length > 0 && (
         <ul className="list-disc space-y-1 pl-5" style={{ color: "var(--warning)" }}>

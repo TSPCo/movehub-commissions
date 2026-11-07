@@ -73,6 +73,8 @@ model User {
   uploadedInvoices      StaffInvoice[]         @relation("InvoiceUploader")
   bonuses               BonusPayment[]         @relation("BonusOwner")
   recordedBonuses       BonusPayment[]         @relation("BonusRecorder")
+  bankDetails           StaffBankDetails?      @relation("BankDetailsOwner")
+  editedBankDetails     StaffBankDetails[]     @relation("BankDetailsEditor")
 }
 
 model PasswordResetRequest {
@@ -188,6 +190,32 @@ model BonusPayment {
   recordedBy User? @relation("BonusRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@index([userId])
+}
+
+// ─── Staff bank details ─────────────────────────────────────────────────────
+// Where someone's commission gets paid. Only they and admins can see it. The
+// account name, sort code and account number are stored together as one
+// AES-256-GCM encrypted blob (key: BANK_DETAILS_KEY, see src/lib/bankDetails.ts)
+// so a database leak alone doesn't expose them; accountNumberLast4 is kept in
+// the clear only so lists can show "ending 1234" without decrypting.
+// Used by the invoice check to confirm an invoice asks to be paid into the
+// account on file. Cascade-deleted with the user — personal data, not history.
+
+model StaffBankDetails {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  encrypted          String
+  accountNumberLast4 String
+  // Set only when existing details are replaced (not on first entry). The
+  // invoice check flags any invoice whose owner changed details since their
+  // last paid invoice — the classic way payments get redirected.
+  lastChangedAt      DateTime?
+  updatedById        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user      User  @relation("BankDetailsOwner", fields: [userId], references: [id], onDelete: Cascade)
+  updatedBy User? @relation("BankDetailsEditor", fields: [updatedById], references: [id], onDelete: SetNull)
 }
 
 // ─── Singleton commission scheme settings ──────────────────────────────────
