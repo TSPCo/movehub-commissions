@@ -20,7 +20,11 @@ export default async function StaffBankDetailsPage({ params }: { params: Promise
         ← Staff
       </Link>
       <PageHeader title={`Bank details — ${label}`} description={user.email} />
-      <BankDetailsForm endpoint={`/api/admin/users/${user.id}/bank-details`} ownerLabel={label} />
+      <BankDetailsForm
+        endpoint={`/api/admin/users/${user.id}/bank-details`}
+        suggestEndpoint={`/api/admin/users/${user.id}/bank-details/suggest`}
+        ownerLabel={label}
+      />
     </div>
   );
 }

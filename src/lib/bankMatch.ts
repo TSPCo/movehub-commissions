@@ -147,3 +147,62 @@ export function bankCheckFlags(check: BankCheck, changedSinceLastPaymentAt: Date
   }
   return flags;
 }
+
+export interface InvoiceBankReading {
+  invoiceId: string;
+  fileName: string;
+  createdAt: Date;
+  paid: boolean;
+  /** Raw values read off the invoice; null if it showed no bank details or couldn't be read. */
+  read: { accountName?: string | null; sortCode?: string | null; accountNumber?: string | null } | null;
+}
+
+export interface BankSuggestion {
+  /** Pre-fill values for the admin to review — never saved automatically. */
+  suggestion: { accountName: string; sortCode: string; accountNumber: string } | null;
+  /** Why this one was picked, e.g. "most recent paid invoice". */
+  basis: string | null;
+  invoicesRead: number;
+  invoicesWithDetails: number;
+  /** How many invoices show exactly the suggested sort code + account number. */
+  agreeing: number;
+  /** Other accounts seen on their invoices (masked), newest first. */
+  otherAccounts: { sortCode: string; accountLast4: string; fileName: string; createdAt: string }[];
+}
+
+/**
+ * Picks the account to suggest from someone's past invoices. A paid invoice is
+ * preferred over an unpaid one (it's an account money has actually gone to),
+ * then the newest. Any different accounts are listed so an admin can see the
+ * invoices don't agree before saving anything.
+ */
+export function suggestFromInvoices(readings: InvoiceBankReading[]): BankSuggestion {
+  const usable = readings
+    .map((r) => {
+      const sortCode = digitsOnly(r.read?.sortCode);
+      const accountNumber = digitsOnly(r.read?.accountNumber);
+      if (sortCode.length !== 6 || accountNumber.length < 6 || accountNumber.length > 8) return null;
+      return { ...r, sortCode, accountNumber: accountNumber.padStart(8, "0"), accountName: r.read?.accountName?.trim() ?? "" };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .sort((a, b) => Number(b.paid) - Number(a.paid) || b.createdAt.getTime() - a.createdAt.getTime());
+
+  const base = { invoicesRead: readings.length, invoicesWithDetails: usable.length };
+  const pick = usable[0];
+  if (!pick) return { ...base, suggestion: null, basis: null, agreeing: 0, otherAccounts: [] };
+
+  const key = (r: { sortCode: string; accountNumber: string }) => `${r.sortCode}:${r.accountNumber}`;
+  const seen = new Set([key(pick)]);
+  const otherAccounts = [...usable]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .filter((r) => !seen.has(key(r)) && (seen.add(key(r)), true))
+    .map((r) => ({ sortCode: maskSortCode(r.sortCode), accountLast4: r.accountNumber.slice(-4), fileName: r.fileName, createdAt: r.createdAt.toISOString() }));
+
+  return {
+    ...base,
+    suggestion: { accountName: pick.accountName, sortCode: formatSortCode(pick.sortCode), accountNumber: pick.accountNumber },
+    basis: `${pick.paid ? "most recent paid invoice" : "most recent invoice"} (${pick.fileName}, ${pick.createdAt.toLocaleDateString("en-GB")})`,
+    agreeing: usable.filter((r) => key(r) === key(pick)).length,
+    otherAccounts,
+  };
+}

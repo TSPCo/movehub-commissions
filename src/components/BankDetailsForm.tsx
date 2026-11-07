@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Eye, EyeOff, Lock } from "lucide-react";
+import { Eye, EyeOff, FileSearch, Lock } from "lucide-react";
 
 type Saved = {
   accountName: string;
@@ -14,17 +14,71 @@ type Saved = {
 
 type Response = { configured: boolean; details: Saved | null; unreadable?: boolean };
 
+type Suggestion = {
+  suggestion: { accountName: string; sortCode: string; accountNumber: string } | null;
+  basis: string | null;
+  invoicesRead: number;
+  invoicesWithDetails: number;
+  agreeing: number;
+  otherAccounts: { sortCode: string; accountLast4: string; fileName: string; createdAt: string }[];
+};
+
 /**
  * View / edit one person's bank details. `endpoint` is /api/my/bank-details for
  * the signed-in person, or /api/admin/users/:id/bank-details for an admin.
+ * `suggestEndpoint` (admin only) adds a button that pre-fills the form from
+ * their stored invoices — nothing is saved until the admin clicks Save.
  */
-export function BankDetailsForm({ endpoint, ownerLabel }: { endpoint: string; ownerLabel: string }) {
+export function BankDetailsForm({
+  endpoint,
+  ownerLabel,
+  suggestEndpoint,
+}: {
+  endpoint: string;
+  ownerLabel: string;
+  suggestEndpoint?: string;
+}) {
   const [data, setData] = useState<Response | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ accountName: "", sortCode: "", accountNumber: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+
+  async function fillFromInvoices() {
+    if (!suggestEndpoint) return;
+    setSuggesting(true);
+    setError(null);
+    setNotice(null);
+    setSuggestion(null);
+    try {
+      const res = await fetch(suggestEndpoint, { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error || "Couldn't read their invoices");
+        return;
+      }
+      const s = body as Suggestion;
+      setSuggestion(s);
+      if (s.suggestion) {
+        setForm(s.suggestion);
+        setEditing(true);
+      } else {
+        setError(`Read ${s.invoicesRead} invoice${s.invoicesRead === 1 ? "" : "s"} but none showed a full sort code and account number.`);
+      }
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  const fillButton = suggestEndpoint && (
+    <button type="button" onClick={fillFromInvoices} disabled={suggesting} className="btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs">
+      <FileSearch className="h-3.5 w-3.5" />
+      {suggesting ? "Reading their invoices…" : "Fill from their invoices"}
+    </button>
+  );
 
   const load = useCallback(
     async (reveal = false) => {
@@ -56,6 +110,7 @@ export function BankDetailsForm({ endpoint, ownerLabel }: { endpoint: string; ow
   async function startEditing() {
     setError(null);
     setNotice(null);
+    setSuggestion(null);
     setForm({ accountName: data?.details?.accountName ?? "", sortCode: "", accountNumber: "" });
     setEditing(true);
   }
@@ -76,6 +131,7 @@ export function BankDetailsForm({ endpoint, ownerLabel }: { endpoint: string; ow
         return;
       }
       setEditing(false);
+      setSuggestion(null);
       setForm({ accountName: "", sortCode: "", accountNumber: "" });
       setNotice(body.changed ? "Saved. A confirmation email has gone to the account holder and the admin team." : "No changes — those are the details already on file.");
       await load();
@@ -136,6 +192,7 @@ export function BankDetailsForm({ endpoint, ownerLabel }: { endpoint: string; ow
             <button onClick={startEditing} className="btn-secondary px-3 py-1.5 text-xs">
               Change details
             </button>
+            {fillButton}
           </div>
         </div>
       )}
@@ -145,14 +202,42 @@ export function BankDetailsForm({ endpoint, ownerLabel }: { endpoint: string; ow
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             No bank details saved yet. Add them so invoices can be checked against the account you&apos;re paid into.
           </p>
-          <button onClick={startEditing} className="btn-primary px-4 py-2 text-sm">
-            Add bank details
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={startEditing} className="btn-primary px-4 py-2 text-sm">
+              Add bank details
+            </button>
+            {fillButton}
+          </div>
         </div>
       )}
 
       {editing && (
         <form onSubmit={handleSave} className="space-y-3" autoComplete="off">
+          {suggestion?.suggestion && (
+            <div className="rounded-lg px-3 py-2 text-xs space-y-1" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+              <p style={{ color: "var(--text-secondary)" }}>
+                Filled in from their {suggestion.basis}. {suggestion.agreeing} of {suggestion.invoicesWithDetails} invoice
+                {suggestion.invoicesWithDetails === 1 ? "" : "s"} with bank details show this account
+                {suggestion.invoicesRead > suggestion.invoicesWithDetails
+                  ? ` (${suggestion.invoicesRead - suggestion.invoicesWithDetails} had none or couldn't be read)`
+                  : ""}
+                . Check it before saving — nothing is saved yet.
+              </p>
+              {suggestion.otherAccounts.length > 0 && (
+                <div style={{ color: "var(--warning)" }}>
+                  <p className="font-medium">Their invoices also show a different account:</p>
+                  <ul className="list-disc pl-5">
+                    {suggestion.otherAccounts.map((a, i) => (
+                      <li key={i}>
+                        {a.sortCode}, ending {a.accountLast4} — {a.fileName} ({new Date(a.createdAt).toLocaleDateString("en-GB")})
+                      </li>
+                    ))}
+                  </ul>
+                  <p>Confirm with them which is right before saving.</p>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Name on the account</label>
             <input

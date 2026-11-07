@@ -67,3 +67,27 @@ test("recently changed details are flagged", () => {
   const c = compareBankDetails(saved, { sortCode: "123456", accountNumber: "01234567" });
   assert.match(bankCheckFlags(c, new Date("2026-11-01"))[0], /changed on 01\/11\/2026/);
 });
+
+test("suggests the most recent paid invoice's account and lists others", async () => {
+  const { suggestFromInvoices } = await import("./bankMatch");
+  const r = (id: string, date: string, paid: boolean, read: InvoiceRead) => ({ invoiceId: id, fileName: `${id}.pdf`, createdAt: new Date(date), paid, read });
+  type InvoiceRead = { accountName?: string; sortCode?: string; accountNumber?: string } | null;
+  const s = suggestFromInvoices([
+    r("a", "2026-08-01", true, { accountName: "Sam Rodgers", sortCode: "12-34-56", accountNumber: "1234567" }),
+    r("b", "2026-09-01", true, { accountName: "Sam Rodgers", sortCode: "123456", accountNumber: "01234567" }),
+    r("c", "2026-10-01", false, { accountName: "Sam R", sortCode: "99-88-77", accountNumber: "55556666" }),
+    r("d", "2026-10-05", false, null),
+  ]);
+  assert.deepEqual(s.suggestion, { accountName: "Sam Rodgers", sortCode: "12-34-56", accountNumber: "01234567" });
+  assert.equal(s.agreeing, 2);
+  assert.equal(s.invoicesWithDetails, 3);
+  assert.equal(s.otherAccounts.length, 1);
+  assert.equal(s.otherAccounts[0].accountLast4, "6666");
+  assert.match(s.basis!, /paid invoice \(b\.pdf/);
+});
+
+test("no readable bank details means no suggestion", async () => {
+  const { suggestFromInvoices } = await import("./bankMatch");
+  const s = suggestFromInvoices([{ invoiceId: "x", fileName: "x.pdf", createdAt: new Date(), paid: true, read: { sortCode: "12" } }]);
+  assert.equal(s.suggestion, null);
+});

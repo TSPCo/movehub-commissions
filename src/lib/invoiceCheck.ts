@@ -55,7 +55,7 @@ export interface InvoiceCheckResult {
 
 export class InvoiceCheckUnavailableError extends Error {}
 
-interface Extraction {
+export interface Extraction {
   totalAmount: number | null;
   lines: { address: string; postcode: string | null; amount: number | null }[];
   bankDetails?: { accountName: string | null; sortCode: string | null; accountNumber: string | null } | null;
@@ -64,7 +64,7 @@ interface Extraction {
 const toPence = (pounds: number | null | undefined) =>
   typeof pounds === "number" && Number.isFinite(pounds) ? Math.round(pounds * 100) : null;
 
-async function extractInvoice(fileData: Buffer, mimeType: string): Promise<Extraction | null> {
+export async function extractInvoice(fileData: Buffer, mimeType: string): Promise<Extraction | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new InvoiceCheckUnavailableError("ANTHROPIC_API_KEY is not configured");
 
