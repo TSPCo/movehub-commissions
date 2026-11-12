@@ -15,6 +15,7 @@ type UserItem = {
   peerDeleteRequestedAt: string | null;
   peerDeleteRequestedFrom: string | null;
   bankDetails: { accountNumberLast4: string } | null;
+  details: { maxOpenCases: number | null; missing: string[]; syncError: string | null };
 };
 
 type ResetRequestItem = {
@@ -333,7 +334,7 @@ export function UsersClient({
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              {["Name", "Email", "Role", "InTouch fee earner", "Status", "Bank details", ""].map((h) => (
+              {["Name", "Email", "Role", "InTouch fee earner", "Status", "Details & max cases", "Bank details", ""].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
                   {h}
                 </th>
@@ -417,6 +418,19 @@ export function UsersClient({
                     >
                       {STATUS_STYLES[u.status].label}
                     </button>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {u.status !== "INVITED" && (
+                    <Link href={`/admin/users/${u.id}/details`} className="text-xs font-medium" title={u.details.syncError ?? undefined}>
+                      <span style={{ color: u.details.maxOpenCases != null ? "var(--cyan)" : "var(--text-muted)" }}>
+                        {u.details.maxOpenCases != null ? `Max ${u.details.maxOpenCases}` : "Max not set"}
+                      </span>
+                      <span style={{ color: u.details.missing.length ? "var(--warning)" : "var(--success)" }}>
+                        {u.details.missing.length ? " · details incomplete" : " · details complete"}
+                      </span>
+                      {u.details.syncError && <span style={{ color: "var(--danger)" }}> · not synced</span>}
+                    </Link>
                   )}
                 </td>
                 <td className="px-4 py-3">

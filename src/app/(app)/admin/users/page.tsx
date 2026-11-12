@@ -3,6 +3,9 @@ export const dynamic = "force-dynamic";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { UsersClient } from "./UsersClient";
+import { CapacitySyncPanel } from "./CapacitySyncPanel";
+import { missingInvoiceFields } from "@/lib/staffDetails";
+import { capacitySyncConfigured } from "@/lib/capacitySync";
 
 export default async function AdminUsersPage() {
   const session = await requireAdmin();
@@ -21,6 +24,7 @@ export default async function AdminUsersPage() {
         peerDeleteRequestedAt: true,
         peerDeleteRequestedFrom: true,
         bankDetails: { select: { accountNumberLast4: true } },
+        staffDetails: true,
       },
     }),
     db.passwordResetRequest.findMany({
@@ -30,8 +34,13 @@ export default async function AdminUsersPage() {
     }),
   ]);
 
-  const serializedUsers = users.map((u) => ({
+  const serializedUsers = users.map(({ staffDetails, ...u }) => ({
     ...u,
+    details: {
+      maxOpenCases: staffDetails?.maxOpenCases ?? null,
+      missing: missingInvoiceFields(staffDetails),
+      syncError: staffDetails?.capacitySyncError ?? null,
+    },
     createdAt: u.createdAt.toISOString(),
     peerDeleteRequestedAt: u.peerDeleteRequestedAt?.toISOString() ?? null,
   }));
@@ -43,6 +52,7 @@ export default async function AdminUsersPage() {
       <p className="text-sm mb-6" style={{ color: "var(--text-secondary)" }}>
         Manage staff accounts, roles, and InTouch fee earner attribution.
       </p>
+      <CapacitySyncPanel configured={capacitySyncConfigured()} />
       <UsersClient initialUsers={serializedUsers} initialResetRequests={serializedResetRequests} currentUserId={session.sub} />
     </div>
   );

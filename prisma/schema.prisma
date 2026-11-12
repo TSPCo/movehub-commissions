@@ -75,6 +75,10 @@ model User {
   recordedBonuses       BonusPayment[]         @relation("BonusRecorder")
   bankDetails           StaffBankDetails?      @relation("BankDetailsOwner")
   editedBankDetails     StaffBankDetails[]     @relation("BankDetailsEditor")
+  staffDetails          StaffDetails?          @relation("StaffDetailsOwner")
+  editedStaffDetails    StaffDetails[]         @relation("StaffDetailsEditor")
+  capacityChanges       CapacityChange[]       @relation("CapacityChangeOwner")
+  madeCapacityChanges   CapacityChange[]       @relation("CapacityChangeEditor")
 }
 
 model PasswordResetRequest {
@@ -216,6 +220,55 @@ model StaffBankDetails {
 
   user      User  @relation("BankDetailsOwner", fields: [userId], references: [id], onDelete: Cascade)
   updatedBy User? @relation("BankDetailsEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+// ─── Staff details: invoice identity + max open cases ──────────────────────
+// What goes on a progressor's self-billed invoice (legal/trading name, address,
+// VAT status) plus the most open cases they're willing to carry. Staff edit their
+// own; admins can edit anyone's. Issued invoices will snapshot these fields, so
+// this row is current-state only and cascades with the user (personal data,
+// same as StaffBankDetails).
+//
+// maxOpenCases is the master copy for movehub-sales-progression's
+// StaffUser.capacity (dashboard + Imports page): every change is pushed there by
+// email (src/lib/capacitySync.ts). capacitySync* records the last push attempt.
+
+model StaffDetails {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  legalName         String?
+  addressLine1      String?
+  addressLine2      String?
+  city              String?
+  postcode          String?
+  vatRegistered     Boolean   @default(false)
+  vatNumber         String?
+  maxOpenCases      Int?
+  capacitySyncedAt  DateTime?
+  capacitySyncError String?
+  updatedById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user      User  @relation("StaffDetailsOwner", fields: [userId], references: [id], onDelete: Cascade)
+  updatedBy User? @relation("StaffDetailsEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+// Audit trail of max-open-cases changes (staff set their own; admins can
+// override), so a disputed figure can be traced to who changed it and when.
+
+model CapacityChange {
+  id          String   @id @default(cuid())
+  userId      String
+  fromValue   Int?
+  toValue     Int?
+  changedById String?
+  createdAt   DateTime @default(now())
+
+  user      User  @relation("CapacityChangeOwner", fields: [userId], references: [id], onDelete: Cascade)
+  changedBy User? @relation("CapacityChangeEditor", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
 }
 
 // ─── Singleton commission scheme settings ──────────────────────────────────
