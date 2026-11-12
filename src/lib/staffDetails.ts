@@ -2,6 +2,8 @@
 // (see staffDetails.test.ts) and shared by the staff and admin endpoints.
 
 export const MAX_OPEN_CASES_LIMIT = 500;
+/** Most open cases a progressor can set for themselves; admins can set more. */
+export const STAFF_MAX_OPEN_CASES = 75;
 
 export type StaffDetailsInput = {
   legalName: string | null;
@@ -90,4 +92,14 @@ export function missingInvoiceFields(d: Partial<StaffDetailsInput> | null | unde
   if (!d?.postcode) missing.push("postcode");
   if (d?.vatRegistered && !d.vatNumber) missing.push("VAT number");
   return missing;
+}
+
+/**
+ * Staff can't set more than STAFF_MAX_OPEN_CASES; admins can. A figure already
+ * above the cap (set by an admin, or carried over from Sales Progression) can
+ * be kept or lowered — only raising it to something over the cap is blocked.
+ */
+export function checkStaffCasesLimit(next: number | null, previous: number | null, isAdmin: boolean): string | null {
+  if (isAdmin || next == null || next <= STAFF_MAX_OPEN_CASES || (previous != null && next <= previous)) return null;
+  return `Max open cases can be at most ${STAFF_MAX_OPEN_CASES}. Ask an admin if you need it higher.`;
 }

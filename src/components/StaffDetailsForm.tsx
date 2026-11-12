@@ -52,7 +52,7 @@ const fmt = (v: number | null) => (v == null ? "not set" : String(v));
  * One person's invoice details + max open cases. `endpoint` is /api/my/details
  * for the signed-in person, or /api/admin/users/:id/details for an admin.
  */
-export function StaffDetailsForm({ endpoint, ownerLabel }: { endpoint: string; ownerLabel: string }) {
+export function StaffDetailsForm({ endpoint, ownerLabel, staffCap }: { endpoint: string; ownerLabel: string; staffCap?: number }) {
   const [data, setData] = useState<Payload | null>(null);
   const [form, setForm] = useState<Form>(toForm(null));
   const [saving, setSaving] = useState(false);
@@ -128,8 +128,19 @@ export function StaffDetailsForm({ endpoint, ownerLabel }: { endpoint: string; o
             Progression dashboard and used when new cases are assigned on the Imports page.
           </p>
         </div>
-        {field("maxOpenCases", "Max open cases", { type: "number", min: 0, max: 500, inputMode: "numeric", placeholder: "e.g. 90", className: "px-3 py-2 text-sm w-32" })}
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>Leave blank if you haven&apos;t decided yet.</p>
+        {field("maxOpenCases", "Max open cases", {
+          type: "number",
+          min: 0,
+          // A figure already above the cap (set by an admin) can be kept, so don't let the browser reject it.
+          max: staffCap ? Math.max(staffCap, d?.maxOpenCases ?? 0) : 500,
+          inputMode: "numeric",
+          placeholder: staffCap ? `up to ${staffCap}` : "e.g. 60",
+          className: "px-3 py-2 text-sm w-32",
+        })}
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          {staffCap ? `Up to ${staffCap}. Ask an admin if you need it higher. ` : "Staff can set up to 75 themselves; as an admin you can set more. "}
+          Leave blank if you haven&apos;t decided yet.
+        </p>
         {d?.maxOpenCases != null && (
           <p className="flex items-center gap-1.5 text-xs" style={{ color: d.capacitySyncError ? "var(--warning)" : "var(--text-muted)" }}>
             {d.capacitySyncError ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}

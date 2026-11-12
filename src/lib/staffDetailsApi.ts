@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { authorise } from "@/lib/bankDetailsApi";
-import { missingInvoiceFields, parseStaffDetails } from "@/lib/staffDetails";
+import { checkStaffCasesLimit, missingInvoiceFields, parseStaffDetails } from "@/lib/staffDetails";
 import { capacitySyncConfigured, pushCapacity } from "@/lib/capacitySync";
 
 const noStore = { "Cache-Control": "no-store" };
@@ -61,6 +61,8 @@ export async function handlePut(targetUserId: string | null, body: unknown) {
   const d = parsed.details;
 
   const before = await db.staffDetails.findUnique({ where: { userId: auth.userId }, select: { maxOpenCases: true, capacitySyncError: true } });
+  const limitError = checkStaffCasesLimit(d.maxOpenCases, before?.maxOpenCases ?? null, auth.me.role === "ADMIN");
+  if (limitError) return json({ error: limitError }, 400);
   const capacityChanged = (before?.maxOpenCases ?? null) !== d.maxOpenCases;
 
   await db.$transaction([

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { missingInvoiceFields, normalisePostcode, normaliseVatNumber, parseMaxOpenCases, parseStaffDetails } from "./staffDetails";
+import { checkStaffCasesLimit, missingInvoiceFields, normalisePostcode, normaliseVatNumber, parseMaxOpenCases, parseStaffDetails } from "./staffDetails";
 
 test("normalises postcodes and rejects junk", () => {
   assert.equal(normalisePostcode("sk4 1aa"), "SK4 1AA");
@@ -50,4 +50,14 @@ test("lists what's missing for invoicing", () => {
     missingInvoiceFields({ legalName: "Sam", addressLine1: "1 High St", city: "Stockport", postcode: "SK4 1AA", vatRegistered: true, vatNumber: null }),
     ["VAT number"]
   );
+});
+
+test("staff can set up to 75; admins can go higher; an existing higher figure can be kept or lowered", () => {
+  assert.equal(checkStaffCasesLimit(75, null, false), null);
+  assert.match(checkStaffCasesLimit(76, 60, false) ?? "", /at most 75/);
+  assert.equal(checkStaffCasesLimit(100, 60, true), null);
+  assert.equal(checkStaffCasesLimit(85, 85, false), null); // unchanged
+  assert.match(checkStaffCasesLimit(90, 85, false) ?? "", /at most 75/); // raised further
+  assert.equal(checkStaffCasesLimit(80, 100, false), null); // lowered, still over 75
+  assert.equal(checkStaffCasesLimit(null, 85, false), null);
 });
