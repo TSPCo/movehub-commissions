@@ -34,6 +34,40 @@ enum InvoiceCheckStatus {
   UNREADABLE
 }
 
+enum BonusType {
+  DISCRETIONARY
+  REFERRAL
+}
+
+enum SelfBilledStatus {
+  DRAFT
+  ISSUED
+  QUERIED
+  ACCEPTED
+  PAID
+  // A draft discarded, or a queried invoice replaced by a reissue. Kept (with
+  // its number, if it had one) so the number sequence has no unexplained gaps.
+  VOID
+}
+
+enum SelfBilledKind {
+  INVOICE
+  CREDIT_NOTE
+}
+
+enum AcceptedHow {
+  CONFIRMED
+  DEEMED
+}
+
+enum SelfBilledLineType {
+  COMPLETION
+  PERFORMANCE_BONUS
+  ADHOC_BONUS
+  REFERRAL_FEE
+  ADJUSTMENT
+}
+
 enum InvoiceStatus {
   PENDING
   PAID
@@ -79,6 +113,10 @@ model User {
   editedStaffDetails    StaffDetails[]         @relation("StaffDetailsEditor")
   capacityChanges       CapacityChange[]       @relation("CapacityChangeOwner")
   madeCapacityChanges   CapacityChange[]       @relation("CapacityChangeEditor")
+  agreements            SelfBillingAgreement[] @relation("AgreementOwner")
+  endedAgreements       SelfBillingAgreement[] @relation("AgreementEnder")
+  selfBilledInvoices    SelfBilledInvoice[]    @relation("SelfBilledOwner")
+  issuedSelfBilled      SelfBilledInvoice[]    @relation("SelfBilledIssuer")
 }
 
 model PasswordResetRequest {
@@ -134,10 +172,18 @@ model CompletedMatter {
   completionDate DateTime
   createdAt      DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Set once this completion is on a self-billed invoice line, so it's never
+  // billed twice; a completion synced after its month's invoice was raised has
+  // no line yet and rolls onto the next invoice. Cleared if that invoice is
+  // voided (draft discarded or reissued).
+  selfBilledLineId String?
+
+  user           User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  selfBilledLine SelfBilledInvoiceLine? @relation("LineCompletions", fields: [selfBilledLineId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([completionDate])
+  @@index([selfBilledLineId])
 }
 
 // ─── Invoices staff submit (or an admin uploads on their behalf) against ───
@@ -180,13 +226,18 @@ model StaffInvoice {
 // purely completion-driven.
 
 model BonusPayment {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String?
   recordedById String?
   amountPence  Int
   note         String
-  awardedAt    DateTime @default(now())
-  createdAt    DateTime @default(now())
+  type         BonusType @default(DISCRETIONARY)
+  awardedAt    DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+
+  // Same "billed once, late items roll forward" link as CompletedMatter.
+  selfBilledLineId String?
+  selfBilledLine   SelfBilledInvoiceLine? @relation("LineBonuses", fields: [selfBilledLineId], references: [id], onDelete: SetNull)
 
   // SetNull on both, same precedent as StaffInvoice: financial history
   // outlives the login of whoever it was for or whoever recorded it.
@@ -269,6 +320,125 @@ model CapacityChange {
   changedBy User? @relation("CapacityChangeEditor", fields: [changedById], references: [id], onDelete: SetNull)
 
   @@index([userId])
+}
+
+// ─── Self-billing ───────────────────────────────────────────────────────────
+// Move Hub raises each progressor's monthly commission invoice on their behalf
+// under a signed agreement (wording: src/lib/selfBilling/agreementText.ts).
+// Only completions/bonuses dated on or after the agreement start are
+// self-billed; anything earlier stays on the upload (StaffInvoice) flow, so
+// nothing can be invoiced both ways. Financial records: SetNull on users, never
+// cascade, and kept for at least 6 years.
+
+model SelfBillingAgreement {
+  id               String    @id @default(cuid())
+  userId           String?
+  // Always the 1st of a month (UTC); endDate is the last day of a month, at
+  // most 12 months after the start.
+  startDate        DateTime
+  endDate          DateTime
+  version          String
+  // The exact wording shown and signed, with the parties filled in.
+  agreementText    String    @db.Text
+  supplierSnapshot Json
+  signedName       String
+  signedAt         DateTime  @default(now())
+  signedIp         String?
+  moveHubSignatory String
+  // Set when either side ends it early; endDate is then pulled in to the end
+  // of the month, so self-billing stops from the next period.
+  endedAt          DateTime?
+  endedById        String?
+  endReason        String?
+  reminderSentAt   DateTime?
+  createdAt        DateTime  @default(now())
+
+  user     User?               @relation("AgreementOwner", fields: [userId], references: [id], onDelete: SetNull)
+  endedBy  User?               @relation("AgreementEnder", fields: [endedById], references: [id], onDelete: SetNull)
+  invoices SelfBilledInvoice[]
+
+  @@index([userId])
+}
+
+model SelfBilledInvoice {
+  id          String           @id @default(cuid())
+  userId      String?
+  agreementId String?
+  kind        SelfBilledKind   @default(INVOICE)
+  status      SelfBilledStatus @default(DRAFT)
+  // Per-progressor sequence, assigned on issue (drafts have none).
+  sequence    Int?
+  number      String?
+  periodYear  Int
+  periodMonth Int
+
+  netPence       Int    @default(0)
+  vatPence       Int    @default(0)
+  grossPence     Int    @default(0)
+  vatRatePercent Float?
+
+  // Problems found at generation (unmatched completions, incomplete details…).
+  warnings Json?
+
+  issuedAt            DateTime?
+  issuedById          String?
+  // When the clock for deemed acceptance (5 working days) started: issue, or
+  // an admin confirming a queried invoice unchanged.
+  acceptanceClockFrom DateTime?
+  queriedAt           DateTime?
+  queryNote           String?
+  queryResponse       String?
+  acceptedAt          DateTime?
+  acceptedHow         AcceptedHow?
+  paidAt              DateTime?
+  voidedAt            DateTime?
+  voidReason          String?
+
+  // Frozen at issue: what the invoice says, whatever changes later.
+  supplierSnapshot Json?
+  customerSnapshot Json?
+  pdfData          Bytes?
+
+  originalInvoiceId String?
+  replacesInvoiceId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user        User?                   @relation("SelfBilledOwner", fields: [userId], references: [id], onDelete: SetNull)
+  issuedBy    User?                   @relation("SelfBilledIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+  agreement   SelfBillingAgreement?   @relation(fields: [agreementId], references: [id], onDelete: SetNull)
+  original    SelfBilledInvoice?      @relation("CreditNotes", fields: [originalInvoiceId], references: [id], onDelete: SetNull)
+  creditNotes SelfBilledInvoice[]     @relation("CreditNotes")
+  replaces    SelfBilledInvoice?      @relation("Reissues", fields: [replacesInvoiceId], references: [id], onDelete: SetNull)
+  replacedBy  SelfBilledInvoice[]     @relation("Reissues")
+  lines       SelfBilledInvoiceLine[]
+
+  @@unique([userId, sequence])
+  @@index([userId])
+  @@index([status])
+  @@index([periodYear, periodMonth])
+}
+
+model SelfBilledInvoiceLine {
+  id             String             @id @default(cuid())
+  invoiceId      String
+  type           SelfBilledLineType
+  description    String
+  amountPence    Int
+  // For COMPLETION lines.
+  matterAddress  String?
+  completionDate DateTime?
+  // Which month a PERFORMANCE_BONUS line is for — a late completion can raise
+  // an earlier month's uplift, billed as a top-up on a later invoice.
+  forYear        Int?
+  forMonth       Int?
+  sortOrder      Int                @default(0)
+
+  invoice     SelfBilledInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  completions CompletedMatter[] @relation("LineCompletions")
+  bonuses     BonusPayment[]    @relation("LineBonuses")
+
+  @@index([invoiceId])
 }
 
 // ─── Singleton commission scheme settings ──────────────────────────────────

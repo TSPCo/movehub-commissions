@@ -11,7 +11,7 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "test": "node --import tsx --test src/lib/addressMatch.test.ts src/lib/bankMatch.test.ts src/lib/staffDetails.test.ts"
+    "test": "node --import tsx --test src/lib/addressMatch.test.ts src/lib/bankMatch.test.ts src/lib/staffDetails.test.ts src/lib/selfBilling/workingDays.test.ts src/lib/selfBilling/lines.test.ts src/lib/selfBilling/agreementText.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -20,6 +20,7 @@
     "@anthropic-ai/sdk": "^0.104.2",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@react-pdf/renderer": "^4.9.0",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",

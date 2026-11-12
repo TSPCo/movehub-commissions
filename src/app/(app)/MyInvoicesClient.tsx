@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Download, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { formatPence } from "@/lib/money";
 
 type Invoice = {
@@ -17,6 +18,7 @@ type Bonus = {
   id: string;
   amountPence: number;
   note: string;
+  type?: "DISCRETIONARY" | "REFERRAL";
   awardedAt: string;
 };
 
@@ -27,6 +29,8 @@ type InvoicesData = {
   lifetimeEarnedPence: number;
   totalPaidPence: number;
   outstandingPence: number;
+  hasAgreement: boolean;
+  uploadAllowancePence: number;
   invoices: Invoice[];
 };
 
@@ -111,7 +115,7 @@ export function MyInvoicesClient() {
             {data.bonuses.map((b) => (
               <li key={b.id} className="flex items-center gap-3 py-1">
                 <span className="w-16 font-medium">{formatPence(b.amountPence)}</span>
-                <span className="flex-1" style={{ color: "var(--text-secondary)" }}>{b.note}</span>
+                <span className="flex-1" style={{ color: "var(--text-secondary)" }}>{b.type === "REFERRAL" ? "Referral fee — " : ""}{b.note}</span>
                 <span style={{ color: "var(--text-muted)" }}>{new Date(b.awardedAt).toLocaleDateString("en-GB")}</span>
               </li>
             ))}
@@ -119,6 +123,17 @@ export function MyInvoicesClient() {
         </div>
       )}
 
+      {data.hasAgreement && (
+        <div className="card mb-4 p-4 text-sm" style={{ color: "var(--text-secondary)" }}>
+          You&apos;re on self-billing: Move Hub raises your invoices for those months — see{" "}
+          <Link href="/self-billing" className="underline" style={{ color: "var(--cyan)" }}>Self-billing</Link>.
+          {data.uploadAllowancePence > 0
+            ? ` You can still upload an invoice for up to ${formatPence(data.uploadAllowancePence)} from months before your agreement.`
+            : ""}
+        </div>
+      )}
+
+      {(!data.hasAgreement || data.uploadAllowancePence > 0) && (
       <div className="card mb-4 p-5">
         <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
           Submit an invoice for what&apos;s owed{data.bonusPence > 0 ? " — this includes any bonuses above, so you can invoice them together with your commission" : ""}.
@@ -153,6 +168,7 @@ export function MyInvoicesClient() {
         </form>
         {error && <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{error}</p>}
       </div>
+      )}
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">

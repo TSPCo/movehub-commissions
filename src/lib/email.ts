@@ -4,6 +4,7 @@ export interface SendEmailOptions {
   to: string;
   subject: string;
   html: string;
+  attachments?: { filename: string; content: Buffer }[];
 }
 
 /** Sends an email via Resend. No-ops (logging instead) when RESEND_API_KEY isn't set, so local dev and pre-DNS-verification deploys don't error out. */
@@ -21,6 +22,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ sent: boolean
     to: opts.to,
     subject: opts.subject,
     html: opts.html,
+    ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
   });
 
   if (error) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { runInvoiceCheck } from "@/lib/invoiceCheck";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getEarnedBreakdown, MAX_INVOICE_FILE_BYTES, ALLOWED_INVOICE_MIME_TYPES } from "@/lib/payments";
+import { getEarnedBreakdown, getPaidPence, getCreditedPence, getUploadAllowancePence, MAX_INVOICE_FILE_BYTES, ALLOWED_INVOICE_MIME_TYPES } from "@/lib/payments";
 import { formatPence } from "@/lib/money";
 
 export async function GET() {
@@ -15,22 +15,30 @@ export async function GET() {
     select: { id: true, amountPence: true, fileName: true, status: true, paidAt: true, createdAt: true },
   });
 
-  const [earned, bonuses] = await Promise.all([
+  const [earned, bonuses, paidPence, upload, creditedPence] = await Promise.all([
     getEarnedBreakdown(session.sub),
     db.bonusPayment.findMany({
       where: { userId: session.sub },
       orderBy: { awardedAt: "desc" },
-      select: { id: true, amountPence: true, note: true, awardedAt: true },
+      select: { id: true, amountPence: true, note: true, type: true, awardedAt: true },
     }),
+    getPaidPence(session.sub),
+    getUploadAllowancePence(session.sub),
+    getCreditedPence(session.sub),
   ]);
-  const totalPaidPence = invoices.filter((i) => i.status === "PAID").reduce((sum, i) => sum + i.amountPence, 0);
+  const totalPaidPence = paidPence;
 
   return NextResponse.json({
     commissionEarnedPence: earned.commissionPence,
     bonusPence: earned.bonusPence,
     lifetimeEarnedPence: earned.totalPence,
     totalPaidPence,
-    outstandingPence: earned.totalPence - totalPaidPence,
+    creditedPence,
+    outstandingPence: earned.totalPence - creditedPence - totalPaidPence,
+    // Self-billing: commission in agreement months is invoiced by Move Hub, so
+    // the upload form only offers what's left from months outside them.
+    hasAgreement: upload.hasAgreement,
+    uploadAllowancePence: Math.max(upload.allowancePence, 0),
     bonuses: bonuses.map((b) => ({ ...b, awardedAt: b.awardedAt.toISOString() })),
     invoices: invoices.map((i) => ({ ...i, createdAt: i.createdAt.toISOString(), paidAt: i.paidAt?.toISOString() ?? null })),
   });
@@ -62,17 +70,15 @@ export async function POST(request: NextRequest) {
   // has actually been earned, minus anything already invoiced (paid or still
   // pending) — the pending half of that matters too, or someone could submit
   // the same amount twice before the first one's marked paid.
-  const [earned, existingInvoices] = await Promise.all([
-    getEarnedBreakdown(session.sub),
-    db.staffInvoice.findMany({ where: { userId: session.sub }, select: { amountPence: true } }),
-  ]);
-  const alreadyInvoicedPence = existingInvoices.reduce((sum, i) => sum + i.amountPence, 0);
-  const availablePence = earned.totalPence - alreadyInvoicedPence;
+  // Months covered by a self-billing agreement are excluded — Move Hub invoices those.
+  const { allowancePence: availablePence, hasAgreement } = await getUploadAllowancePence(session.sub);
 
   if (amountPence > availablePence) {
     return NextResponse.json(
       {
-        error: `That's more than you're currently owed — based on completed matters and any bonuses, you can invoice up to ${formatPence(Math.max(availablePence, 0))}.`,
+        error: hasAgreement
+          ? `That's more than you can invoice yourself. Commission from your self-billing months is invoiced by Move Hub; from other months you can invoice up to ${formatPence(Math.max(availablePence, 0))}.`
+          : `That's more than you're currently owed — based on completed matters and any bonuses, you can invoice up to ${formatPence(Math.max(availablePence, 0))}.`,
       },
       { status: 400 }
     );

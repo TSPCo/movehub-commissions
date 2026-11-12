@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { runInvoiceCheck } from "@/lib/invoiceCheck";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getEarnedBreakdown, MAX_INVOICE_FILE_BYTES, ALLOWED_INVOICE_MIME_TYPES } from "@/lib/payments";
+import { getEarnedBreakdown, getPaidPence, getCreditedPence, MAX_INVOICE_FILE_BYTES, ALLOWED_INVOICE_MIME_TYPES } from "@/lib/payments";
 
 export async function GET() {
   const users = await db.user.findMany({
@@ -14,7 +14,7 @@ export async function GET() {
       email: true,
       bonuses: {
         orderBy: { awardedAt: "desc" },
-        select: { id: true, amountPence: true, note: true, awardedAt: true },
+        select: { id: true, amountPence: true, note: true, type: true, awardedAt: true },
       },
       invoices: {
         orderBy: { createdAt: "desc" },
@@ -36,8 +36,7 @@ export async function GET() {
 
   const rows = await Promise.all(
     users.map(async (u) => {
-      const earned = await getEarnedBreakdown(u.id);
-      const totalPaidPence = u.invoices.filter((i) => i.status === "PAID").reduce((sum, i) => sum + i.amountPence, 0);
+      const [earned, totalPaidPence, creditedPence] = await Promise.all([getEarnedBreakdown(u.id), getPaidPence(u.id), getCreditedPence(u.id)]);
       const unpaidInvoicePence = u.invoices.filter((i) => i.status === "PENDING").reduce((sum, i) => sum + i.amountPence, 0);
       return {
         userId: u.id,
@@ -47,7 +46,8 @@ export async function GET() {
         bonusPence: earned.bonusPence,
         lifetimeEarnedPence: earned.totalPence,
         totalPaidPence,
-        outstandingPence: earned.totalPence - totalPaidPence,
+        creditedPence,
+        outstandingPence: earned.totalPence - creditedPence - totalPaidPence,
         bonuses: u.bonuses.map((b) => ({ ...b, awardedAt: b.awardedAt.toISOString() })),
         unpaidInvoicePence,
         invoices: u.invoices.map((i) => ({

@@ -98,6 +98,7 @@ type Bonus = {
   id: string;
   amountPence: number;
   note: string;
+  type: "DISCRETIONARY" | "REFERRAL";
   awardedAt: string;
 };
 
@@ -251,6 +252,7 @@ function RowGroup({
 }) {
   const [bonusAmount, setBonusAmount] = useState("");
   const [bonusNote, setBonusNote] = useState("");
+  const [bonusType, setBonusType] = useState<"DISCRETIONARY" | "REFERRAL">("DISCRETIONARY");
   const [addingBonus, setAddingBonus] = useState(false);
   const [bonusError, setBonusError] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
@@ -295,7 +297,7 @@ function RowGroup({
     const res = await fetch("/api/admin/bonuses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: row.userId, amountPence: Math.round(Number(bonusAmount) * 100), note: bonusNote }),
+      body: JSON.stringify({ userId: row.userId, amountPence: Math.round(Number(bonusAmount) * 100), note: bonusNote, type: bonusType }),
     });
     const body = await res.json().catch(() => ({}));
     setAddingBonus(false);
@@ -340,6 +342,13 @@ function RowGroup({
                   <input required type="number" min="0.01" step="0.01" value={bonusAmount} onChange={(e) => setBonusAmount(e.target.value)} placeholder="0.00" className="w-28 px-3 py-2 text-sm" />
                 </div>
                 <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Type</label>
+                  <select value={bonusType} onChange={(e) => setBonusType(e.target.value as "DISCRETIONARY" | "REFERRAL")} className="px-3 py-2 text-sm">
+                    <option value="DISCRETIONARY">Bonus</option>
+                    <option value="REFERRAL">Referral fee</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>What was it for?</label>
                   <input required value={bonusNote} onChange={(e) => setBonusNote(e.target.value)} placeholder="e.g. Q3 bonus" className="w-64 px-3 py-2 text-sm" />
                 </div>
@@ -353,7 +362,7 @@ function RowGroup({
                   {row.bonuses.map((b) => (
                     <li key={b.id} className="flex items-center gap-3 py-1" style={{ borderBottom: "1px solid var(--border)" }}>
                       <span className="w-16 font-medium">{formatPence(b.amountPence)}</span>
-                      <span className="flex-1" style={{ color: "var(--text-secondary)" }}>{b.note}</span>
+                      <span className="flex-1" style={{ color: "var(--text-secondary)" }}>{b.type === "REFERRAL" ? "Referral fee — " : ""}{b.note}</span>
                       <span style={{ color: "var(--text-muted)" }}>{new Date(b.awardedAt).toLocaleDateString("en-GB")}</span>
                       <button onClick={() => onRemoveBonus(b.id)} style={{ color: "var(--danger)" }} title="Delete bonus">
                         <Trash2 className="h-3.5 w-3.5" />

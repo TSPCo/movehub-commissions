@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
   const userId = body?.userId;
   const amountPence = Math.round(Number(body?.amountPence));
   const note = typeof body?.note === "string" ? body.note.trim() : "";
+  const type = body?.type === "REFERRAL" ? "REFERRAL" : "DISCRETIONARY";
 
   if (typeof userId !== "string" || !userId) {
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
@@ -26,11 +27,11 @@ export async function POST(request: NextRequest) {
   if (!target) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
 
   const bonus = await db.bonusPayment.create({
-    data: { userId, recordedById: session.sub, amountPence, note },
+    data: { userId, recordedById: session.sub, amountPence, note, type },
   });
 
   return NextResponse.json(
-    { bonus: { id: bonus.id, amountPence: bonus.amountPence, note: bonus.note, awardedAt: bonus.awardedAt.toISOString() } },
+    { bonus: { id: bonus.id, amountPence: bonus.amountPence, note: bonus.note, type: bonus.type, awardedAt: bonus.awardedAt.toISOString() } },
     { status: 201 }
   );
 }
