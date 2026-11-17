@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateToken } from "@/lib/auth";
-import { INVITE_TTL_MS } from "@/lib/tokens";
+import { INVITE_TTL_MS, canUseInviteLink } from "@/lib/tokens";
 import { getAppUrl } from "@/lib/url";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -9,7 +9,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const existing = await db.user.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (existing.status !== "INVITED") {
+  if (!canUseInviteLink(existing)) {
     return NextResponse.json({ error: "This account has already been set up" }, { status: 400 });
   }
 

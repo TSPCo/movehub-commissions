@@ -25,6 +25,7 @@ export default async function AdminUsersPage() {
         peerDeleteRequestedFrom: true,
         bankDetails: { select: { accountNumberLast4: true } },
         staffDetails: true,
+        passwordHash: true,
       },
     }),
     db.passwordResetRequest.findMany({
@@ -34,8 +35,9 @@ export default async function AdminUsersPage() {
     }),
   ]);
 
-  const serializedUsers = users.map(({ staffDetails, ...u }) => ({
+  const serializedUsers = users.map(({ staffDetails, passwordHash, ...u }) => ({
     ...u,
+    hasPassword: !!passwordHash,
     details: {
       maxOpenCases: staffDetails?.maxOpenCases ?? null,
       missing: missingInvoiceFields(staffDetails),

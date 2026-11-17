@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { hashPassword, setSessionCookie } from "@/lib/auth";
+import { canUseInviteLink } from "@/lib/tokens";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const user = await db.user.findUnique({ where: { inviteToken: token } });
-  if (!user || user.status !== "INVITED" || !user.inviteTokenExpiry || user.inviteTokenExpiry < new Date()) {
+  if (!user || !canUseInviteLink(user) || !user.inviteTokenExpiry || user.inviteTokenExpiry < new Date()) {
     return NextResponse.json({ error: "This invite link is no longer valid" }, { status: 400 });
   }
 

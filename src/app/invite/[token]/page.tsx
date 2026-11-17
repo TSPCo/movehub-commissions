@@ -1,11 +1,12 @@
 import Image from "next/image";
 import { db } from "@/lib/db";
 import { InviteForm } from "./InviteForm";
+import { canUseInviteLink } from "@/lib/tokens";
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const user = await db.user.findUnique({ where: { inviteToken: token } });
-  const valid = !!user && user.status === "INVITED" && !!user.inviteTokenExpiry && user.inviteTokenExpiry > new Date();
+  const valid = !!user && canUseInviteLink(user) && !!user.inviteTokenExpiry && user.inviteTokenExpiry > new Date();
 
   return (
     <div className="flex min-h-full items-center justify-center px-4" style={{ background: "var(--bg-base)" }}>

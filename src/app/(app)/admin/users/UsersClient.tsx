@@ -16,7 +16,14 @@ type UserItem = {
   peerDeleteRequestedFrom: string | null;
   bankDetails: { accountNumberLast4: string } | null;
   details: { maxOpenCases: number | null; missing: string[]; syncError: string | null };
+  // Absent on rows added client-side straight after inviting (those are INVITED anyway).
+  hasPassword?: boolean;
 };
+
+// ACTIVE but never set a password, so they can't log in yet — offer a setup link.
+function isNotSetUp(u: UserItem) {
+  return u.status === "ACTIVE" && u.hasPassword === false;
+}
 
 type ResetRequestItem = {
   id: string;
@@ -104,7 +111,11 @@ export function UsersClient({
       setError(body.error || "Something went wrong");
       return;
     }
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...body.user } : u)));
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === id ? { ...u, ...body.user, ...(typeof data.password === "string" && data.password ? { hasPassword: true } : {}) } : u,
+      ),
+    );
     router.refresh();
   }
 
@@ -419,6 +430,15 @@ export function UsersClient({
                       {STATUS_STYLES[u.status].label}
                     </button>
                   )}
+                  {isNotSetUp(u) && (
+                    <span
+                      className="ml-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+                      style={{ background: STATUS_STYLES.INVITED.bg, color: STATUS_STYLES.INVITED.color }}
+                      title="Active, but they've never set a password so can't log in yet. Use Copy setup link."
+                    >
+                      Not set up
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   {u.status !== "INVITED" && (
@@ -469,6 +489,11 @@ export function UsersClient({
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
+                      {isNotSetUp(u) && (
+                        <button onClick={() => handleResendInvite(u.id, u.email)} className="text-xs font-medium" style={{ color: "var(--cyan)" }}>
+                          Copy setup link
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setPasswordResetId(u.id);
