@@ -292,6 +292,8 @@ model StaffDetails {
   addressLine2      String?
   city              String?
   postcode          String?
+  // null = United Kingdom (UK postcode rules apply); anything else is free text.
+  country           String?
   vatRegistered     Boolean   @default(false)
   vatNumber         String?
   maxOpenCases      Int?

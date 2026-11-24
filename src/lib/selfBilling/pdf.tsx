@@ -77,7 +77,7 @@ function InvoiceDoc({ inv }: { inv: PdfInvoice }) {
           <View style={s.party}>
             <Text style={s.h}>Supplier</Text>
             <Text style={s.strong}>{sup.legalName}</Text>
-            {[sup.addressLine1, sup.addressLine2, sup.city, sup.postcode].filter(Boolean).map((l, i) => <Text key={i}>{l}</Text>)}
+            {[sup.addressLine1, sup.addressLine2, sup.city, sup.postcode, sup.country].filter(Boolean).map((l, i) => <Text key={i}>{l}</Text>)}
             <Text style={{ marginTop: 4 }}>{sup.vatRegistered && sup.vatNumber ? `VAT number ${sup.vatNumber}` : "Supplier not registered for VAT"}</Text>
           </View>
           <View style={s.party}>

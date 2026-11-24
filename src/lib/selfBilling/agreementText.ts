@@ -24,11 +24,13 @@ export type Supplier = {
   addressLine2: string | null;
   city: string;
   postcode: string;
+  /** null/absent = United Kingdom (older snapshots don't have it). */
+  country?: string | null;
   vatRegistered: boolean;
   vatNumber: string | null;
 };
 
-export const supplierAddress = (s: Supplier) => [s.addressLine1, s.addressLine2, s.city, s.postcode].filter(Boolean).join(", ");
+export const supplierAddress = (s: Supplier) => [s.addressLine1, s.addressLine2, s.city, s.postcode, s.country].filter(Boolean).join(", ");
 
 const day = (d: Date) => d.toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" });
 

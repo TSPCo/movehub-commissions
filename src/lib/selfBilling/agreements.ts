@@ -57,7 +57,7 @@ export async function signingState(userId: string, now = new Date()) {
 }
 
 function toSupplier(d: NonNullable<Awaited<ReturnType<typeof db.staffDetails.findUnique>>>): Supplier {
-  return { legalName: d.legalName!, addressLine1: d.addressLine1!, addressLine2: d.addressLine2, city: d.city!, postcode: d.postcode!, vatRegistered: d.vatRegistered, vatNumber: d.vatRegistered ? d.vatNumber : null };
+  return { legalName: d.legalName!, addressLine1: d.addressLine1!, addressLine2: d.addressLine2, city: d.city!, postcode: d.postcode!, country: d.country, vatRegistered: d.vatRegistered, vatNumber: d.vatRegistered ? d.vatNumber : null };
 }
 
 export async function signAgreement(userId: string, signedName: string, agreed: boolean, ip: string | null) {

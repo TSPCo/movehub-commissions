@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkStaffCasesLimit, missingInvoiceFields, normalisePostcode, normaliseVatNumber, parseMaxOpenCases, parseStaffDetails } from "./staffDetails";
+import { checkStaffCasesLimit, missingInvoiceFields, normaliseCountry, normalisePostcode, normaliseVatNumber, parseMaxOpenCases, parseStaffDetails } from "./staffDetails";
 
 test("normalises postcodes and rejects junk", () => {
   assert.equal(normalisePostcode("sk4 1aa"), "SK4 1AA");
@@ -60,4 +60,19 @@ test("staff can set up to 75; admins can go higher; an existing higher figure ca
   assert.match(checkStaffCasesLimit(90, 85, false) ?? "", /at most 75/); // raised further
   assert.equal(checkStaffCasesLimit(80, 100, false), null); // lowered, still over 75
   assert.equal(checkStaffCasesLimit(null, 85, false), null);
+});
+
+test("non-UK addresses: country set → postal code not checked against UK format", () => {
+  const es = parseStaffDetails({ legalName: "Ana", addressLine1: "Calle Mayor 5", city: "Málaga", postcode: "29001", country: " Spain " });
+  assert.ok(es.ok);
+  if (es.ok) {
+    assert.equal(es.details.country, "Spain");
+    assert.equal(es.details.postcode, "29001");
+  }
+  const uk = parseStaffDetails({ postcode: "29001", country: "" });
+  assert.equal(uk.ok, false);
+  assert.equal(normaliseCountry("United Kingdom"), null);
+  assert.equal(normaliseCountry("uk"), null);
+  assert.equal(normaliseCountry(undefined), null);
+  assert.equal(parseStaffDetails({ postcode: "sk41aa" }).ok && "ok", "ok");
 });

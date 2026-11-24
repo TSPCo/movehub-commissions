@@ -24,7 +24,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       issuedAt: new Date(),
       periodYear: inv.periodYear,
       periodMonth: inv.periodMonth,
-      supplier: { legalName: d.legalName!, addressLine1: d.addressLine1!, addressLine2: d.addressLine2, city: d.city!, postcode: d.postcode!, vatRegistered: d.vatRegistered, vatNumber: d.vatNumber },
+      supplier: { legalName: d.legalName!, addressLine1: d.addressLine1!, addressLine2: d.addressLine2, city: d.city!, postcode: d.postcode!, country: d.country, vatRegistered: d.vatRegistered, vatNumber: d.vatNumber },
       lines: inv.lines.map((l) => ({ description: l.description, completionDate: l.completionDate, amountPence: l.amountPence })),
       netPence: inv.netPence,
       vatPence: inv.vatPence,

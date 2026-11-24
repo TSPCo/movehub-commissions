@@ -24,13 +24,14 @@ async function adminEmails() {
   return admins.map((a) => a.email);
 }
 
-function supplierFrom(d: { legalName: string | null; addressLine1: string | null; addressLine2: string | null; city: string | null; postcode: string | null; vatRegistered: boolean; vatNumber: string | null }): Supplier {
+function supplierFrom(d: { legalName: string | null; addressLine1: string | null; addressLine2: string | null; city: string | null; postcode: string | null; country: string | null; vatRegistered: boolean; vatNumber: string | null }): Supplier {
   return {
     legalName: d.legalName!,
     addressLine1: d.addressLine1!,
     addressLine2: d.addressLine2,
     city: d.city!,
     postcode: d.postcode!,
+    country: d.country,
     vatRegistered: d.vatRegistered,
     vatNumber: d.vatRegistered ? d.vatNumber : null,
   };

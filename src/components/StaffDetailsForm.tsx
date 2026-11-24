@@ -9,6 +9,7 @@ type Details = {
   addressLine2: string | null;
   city: string | null;
   postcode: string | null;
+  country: string | null;
   vatRegistered: boolean;
   vatNumber: string | null;
   maxOpenCases: number | null;
@@ -30,6 +31,7 @@ type Form = {
   addressLine2: string;
   city: string;
   postcode: string;
+  country: string;
   vatRegistered: boolean;
   vatNumber: string;
   maxOpenCases: string;
@@ -41,10 +43,14 @@ const toForm = (d: Details | null): Form => ({
   addressLine2: d?.addressLine2 ?? "",
   city: d?.city ?? "",
   postcode: d?.postcode ?? "",
+  country: d?.country ?? "",
   vatRegistered: d?.vatRegistered ?? false,
   vatNumber: d?.vatNumber ?? "",
   maxOpenCases: d?.maxOpenCases != null ? String(d.maxOpenCases) : "",
 });
+
+// "" = United Kingdom. Anything not listed goes through "Other".
+const COUNTRIES = ["Spain", "Ireland", "Portugal", "France"];
 
 const fmt = (v: number | null) => (v == null ? "not set" : String(v));
 
@@ -58,6 +64,7 @@ export function StaffDetailsForm({ endpoint, ownerLabel, staffCap }: { endpoint:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [otherCountry, setOtherCountry] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,6 +75,8 @@ export function StaffDetailsForm({ endpoint, ownerLabel, staffCap }: { endpoint:
         if (!ok) return setError(body.error || "Couldn't load details");
         setData(body);
         setForm(toForm(body.details));
+        const c = body.details?.country ?? "";
+        setOtherCountry(c !== "" && !COUNTRIES.includes(c));
       });
     return () => {
       cancelled = true;
@@ -91,6 +100,8 @@ export function StaffDetailsForm({ endpoint, ownerLabel, staffCap }: { endpoint:
       if (!res.ok) return setError(body.error || "Something went wrong");
       setData(body);
       setForm(toForm(body.details));
+      const c = body.details?.country ?? "";
+      setOtherCountry(c !== "" && !COUNTRIES.includes(c));
       if (body.sync && !body.sync.ok) {
         setNotice(`Saved. Sales Progression hasn't picked up the new max cases yet (${body.sync.error}) — an admin can re-send it.`);
       } else {
@@ -108,6 +119,8 @@ export function StaffDetailsForm({ endpoint, ownerLabel, staffCap }: { endpoint:
       </div>
     );
   }
+
+  const isUk = form.country === "" && !otherCountry;
 
   const field = (k: Exclude<keyof Form, "vatRegistered">, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <div className="flex flex-col gap-1">
@@ -188,7 +201,31 @@ export function StaffDetailsForm({ endpoint, ownerLabel, staffCap }: { endpoint:
         {field("addressLine2", "Address line 2 (optional)", { maxLength: 120 })}
         <div className="grid grid-cols-2 gap-3">
           {field("city", "Town / city", { maxLength: 80 })}
-          {field("postcode", "Postcode", { maxLength: 10, className: "px-3 py-2 text-sm uppercase" })}
+          {field("postcode", isUk ? "Postcode" : "Postal code", { maxLength: isUk ? 10 : 12, className: "px-3 py-2 text-sm uppercase" })}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Country</label>
+            <select
+              value={otherCountry ? "__other" : form.country}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "__other") {
+                  setOtherCountry(true);
+                  set("country", "");
+                } else {
+                  setOtherCountry(false);
+                  set("country", v);
+                }
+              }}
+              className="px-3 py-2 text-sm"
+            >
+              <option value="">United Kingdom</option>
+              {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              <option value="__other">Other…</option>
+            </select>
+          </div>
+          {otherCountry && field("country", "Which country?", { maxLength: 60, placeholder: "e.g. Italy" })}
         </div>
         <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
           <input type="checkbox" checked={form.vatRegistered} onChange={(e) => set("vatRegistered", e.target.checked)} />

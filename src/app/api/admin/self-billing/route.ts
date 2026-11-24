@@ -40,7 +40,7 @@ export async function GET() {
     .map((a) => ({
       agreementId: a.id,
       name: a.user!.staffDetails!.legalName ?? a.user!.name ?? a.user!.email,
-      address: [a.user!.staffDetails!.addressLine1, a.user!.staffDetails!.addressLine2, a.user!.staffDetails!.city, a.user!.staffDetails!.postcode].filter(Boolean).join(", "),
+      address: [a.user!.staffDetails!.addressLine1, a.user!.staffDetails!.addressLine2, a.user!.staffDetails!.city, a.user!.staffDetails!.postcode, a.user!.staffDetails!.country].filter(Boolean).join(", "),
       vatNumber: a.user!.staffDetails!.vatNumber,
       startDate: a.startDate.toISOString().slice(0, 10),
       endDate: a.endDate.toISOString().slice(0, 10),

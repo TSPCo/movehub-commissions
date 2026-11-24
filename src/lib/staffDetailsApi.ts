@@ -14,6 +14,7 @@ const select = {
   addressLine2: true,
   city: true,
   postcode: true,
+  country: true,
   vatRegistered: true,
   vatNumber: true,
   maxOpenCases: true,

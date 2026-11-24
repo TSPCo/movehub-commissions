@@ -11,6 +11,8 @@ export type StaffDetailsInput = {
   addressLine2: string | null;
   city: string | null;
   postcode: string | null;
+  /** null = United Kingdom. */
+  country: string | null;
   vatRegistered: boolean;
   vatNumber: string | null;
   maxOpenCases: number | null;
@@ -29,6 +31,16 @@ export function normalisePostcode(raw: string): string | null {
   const s = raw.replace(/\s+/g, "").toUpperCase();
   if (!/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(s)) return null;
   return `${s.slice(0, -3)} ${s.slice(-3)}`;
+}
+
+const UK_NAMES = new Set(["uk", "u.k.", "united kingdom", "gb", "great britain", "britain", "england", "scotland", "wales", "northern ireland"]);
+
+/** Blank or any spelling of the UK → null (UK); otherwise the country as typed, tidied. */
+export function normaliseCountry(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).replace(/\s+/g, " ").trim().slice(0, 60);
+  if (!s || UK_NAMES.has(s.toLowerCase())) return null;
+  return s;
 }
 
 /** "gb 123 4567 89" → "GB123456789". UK VAT numbers are 9 digits (12 for branch traders). */
@@ -50,11 +62,17 @@ export function parseMaxOpenCases(v: unknown): { ok: true; value: number | null 
 export function parseStaffDetails(body: Record<string, unknown>): Parsed {
   const vatRegistered = body.vatRegistered === true || body.vatRegistered === "true";
 
-  let postcode = clean(body.postcode, 10);
+  const country = normaliseCountry(body.country);
+  let postcode = clean(body.postcode, 12);
   if (postcode) {
-    const p = normalisePostcode(postcode);
-    if (!p) return { ok: false, error: "That doesn't look like a UK postcode." };
-    postcode = p;
+    if (country) {
+      // Non-UK postal codes vary too much to validate (e.g. Spain is 5 digits).
+      postcode = postcode.toUpperCase();
+    } else {
+      const p = normalisePostcode(postcode);
+      if (!p) return { ok: false, error: "That doesn't look like a UK postcode. If the address is outside the UK, choose the country first." };
+      postcode = p;
+    }
   }
 
   let vatNumber: string | null = null;
@@ -76,6 +94,7 @@ export function parseStaffDetails(body: Record<string, unknown>): Parsed {
       addressLine2: clean(body.addressLine2, 120),
       city: clean(body.city, 80),
       postcode,
+      country,
       vatRegistered,
       vatNumber,
       maxOpenCases: cases.value,
